@@ -3687,6 +3687,19 @@
 (make-type-array "long" "l" "1.0")
 
 ;;; STM
+(defmacro sync
+  "transaction-flags => TBD, pass nil for now
+
+  Runs the exprs (in an implicit do) in a transaction that encompasses
+  exprs and any nested calls.  Starts a transaction if none is already
+  running on this thread. Any uncaught exception will abort the
+  transaction and flow out of sync. The exprs may be run more than
+  once, but any effects on Refs will be atomic."
+  {:added "1.0"}
+  [flags-ignored-for-now & body]
+  `(. clojure.core.LockingTransaction
+      (runInTransaction (fn [] ~@body))))
+
 (defn- setup-reference [^clojure.lang.ARef r options]
   (let [opts (apply hash-map options)]
     (when (:meta opts)
@@ -3731,6 +3744,81 @@
    :static true}
   ([x] (Atom x))
   ([x & options] (setup-reference (atom x) options)))
+
+(defn ref
+  "Creates and returns a Ref with an initial value of x and zero or
+  more options (in any order):
+
+  :meta metadata-map
+
+  :validator validate-fn
+
+  :min-history (default 0)
+  :max-history (default 10)
+
+  If metadata-map is supplied, it will become the metadata on the
+  ref. validate-fn must be nil or a side-effect-free fn of one
+  argument, which will be passed the intended new state on any state
+  change. If the new state is unacceptable, the validate-fn should
+  return false or throw an exception. validate-fn will be called on
+  transaction commit, when all refs have their final values.
+
+  Normally refs accumulate history dynamically as needed to deal with
+  read demands. If you know in advance you will need history you can
+  set :min-history to ensure it will be available when first needed (instead
+  of after a read fault). History is limited, and the limit can be set
+  with :max-history."
+  {:added "1.0"
+   :static true
+   }
+  ([x] (Ref x)))
+  ; ([x & options] 
+  ;  (let [r  ^clojure.lang.Ref (setup-reference (ref x) options)
+  ;        opts (apply hash-map options)]
+  ;   (when (:max-history opts)
+  ;     (.setMaxHistory r (:max-history opts)))
+  ;   (when (:min-history opts)
+  ;     (.setMinHistory r (:min-history opts)))
+  ;   r)))
+
+(defn ref-set
+  "Must be called in a transaction. Sets the value of ref.
+Returns val."
+  [ref val]
+  (.refSet ref val))
+
+(defn alter
+  "Must be called in a transaction. Sets the in-transaction-value of
+  ref to:
+
+  (apply fun in-transaction-value-of-ref args)
+
+  and returns the in-transaction-value of ref."
+  {:added "1.0"
+   :static true}
+  [^clojure.lang.Ref ref fun & args]
+    (. ref (alter fun args)))
+
+(defn commute
+  "Must be called in a transaction. Sets the in-transaction-value of
+  ref to:
+
+  (apply fun in-transaction-value-of-ref args)
+
+  and returns the in-transaction-value of ref.
+
+  At the commit point of the transaction, sets the value of ref to be:
+
+  (apply fun most-recently-committed-value-of-ref args)
+
+  Thus fun should be commutative, or, failing that, you must accept
+  last-one-in-wins behavior.  commute allows for more concurrency than
+  ref-set."
+  {:added "1.0"
+   :static true}
+
+  [^clojure.lang.Ref ref fun & args]
+    (. ref (commute fun args)))
 
 (require 'multiprocessing.pool)
 (def solo-executor (multiprocessing.pool/ThreadPool))

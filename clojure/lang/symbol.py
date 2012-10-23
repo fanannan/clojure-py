@@ -71,4 +71,3 @@ class Symbol(IObj, IPrintable, Named):
             return self.name
         else:
             return self.ns + "/" + self.name
-

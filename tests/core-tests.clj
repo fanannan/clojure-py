@@ -903,3 +903,17 @@
     (a/assert-equal (with-redefs [class (constantly nil)]
                       (class [])) nil)
     (a/assert-equal (class []) (type []))) ; Make sure variables are restored properly by with-redefs
+
+(deftest ref-tests
+    (a/assert-true (ref nil))
+    (let [r (ref nil)]
+        (a/assert-equal (deref r) nil)
+        (a/assert-equal @r nil))
+    (let [r (ref :a)]
+        (a/assert-equal (ref-set r :b) :b)
+        (a/assert-equal @r :b))
+    (let [r (ref [:a])]
+        (a/assert-equal (alter r conj :b) [:a :b]))
+    (let [r (ref [:a])]
+        (a/assert-equal (commute r conj :b) [:a :b]))
+    (a/assert-equal (sync nil  :a) :a))
