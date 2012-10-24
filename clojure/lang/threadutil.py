@@ -1,7 +1,7 @@
 from threading import Lock, local, currentThread
 from datetime import datetime
 
-from clojure.utils.shared_lock import SharedLock
+from clojure.util.shared_lock import SharedLock
 
 def synchronized(f):
     """ Synchronization decorator. """
@@ -53,7 +53,7 @@ class AtomicInteger(object):
 
     def compareAndSet(self, expected, update):
         self._lock.acquire()
-        if self._v == expected
+        if self._v == expected:
             self._v = update
             success = True
         else:
