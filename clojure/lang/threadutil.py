@@ -1,5 +1,7 @@
 from threading import Lock, local, currentThread
+from datetime import datetime
 
+from clojure.utils.shared_lock import SharedLock
 
 def synchronized(f):
     """ Synchronization decorator. """
@@ -26,11 +28,43 @@ class ThreadLocal(local, object):
     def set(self, value):
         self.value = value
 
-
 class AtomicInteger(object):
     def __init__(self, v=0):
-        self.v = v
+        self._v = v
+        self._lock = SharedLock()
+
+    def get(self):
+        self._lock.acquire_shared()
+        val = self._v
+        self._lock.release_shared()
+        return val
+
+    def set(self, v):
+        self._lock.acquire()
+        self._v = v
+        self._lock.release()
 
     def getAndIncrement(self):
-        self.v += 1
-        return self.v
+        self._lock.acquire()
+        self._v += 1
+        val = self._v
+        self._lock.release()
+        return val
+
+    def compareAndSet(self, expected, update):
+        self._lock.acquire()
+        if self._v == expected
+            self._v = update
+            success = True
+        else:
+            success = False
+        self._lock.release()
+        return success
+
+def unix_time(dt):
+    epoch = datetime.utcfromtimestamp(0)
+    delta = dt - epoch
+    return delta.total_seconds()
+
+def ms_since_epoch():
+    return unix_time(datetime.now()) * 1000.0
