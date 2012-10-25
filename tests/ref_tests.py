@@ -3,14 +3,15 @@
 Thursday, Oct. 25 2012"""
 
 import unittest
+from threading import Thread
+from threading import local as thread_local
+from contextlib import contextmanager
 
 from clojure.lang.ref import Ref, TVal
 from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info
 from clojure.lang.cljexceptions import IllegalStateException
 from clojure.util.shared_lock import SharedLock
 
-from threading import Thread
-from threading import local as thread_local
 import clojure.lang.persistentvector as pv
 
 class TestRef(unittest.TestCase):
@@ -57,32 +58,40 @@ class TestRef(unittest.TestCase):
         self.refOne.trimHistory()
         self.assertEqual(self.refOne.getHistoryCount(), 1)
 
+# TODO refactor to use setupClass and teardownClass, initial attempt didn't
+#      seem to work
+@contextmanager
+def running_transaction(thetest):
+    LockingTransaction.runInTransaction(lambda x: x**2)
+    yield
+    # Clean up and remove LockingTransaction we created
+    LockingTransaction.transaction = thread_local()
+    thetest.assertIsNone(LockingTransaction.get())
+
 class TestLockingTransaction(unittest.TestCase):
     def testNone_PASS(self):
         self.assertIsNone(LockingTransaction.get())
     def testCreateThreadLocal_PASS(self):
-        def f(mainTransaction):
-            self.assertIsNone(LockingTransaction.get())
+        with running_transaction(self):
+            def f(mainTransaction):
+                self.assertIsNone(LockingTransaction.get())
+                LockingTransaction.runInTransaction(lambda x: x**2)
+                self.assertIsInstance(LockingTransaction.get(), LockingTransaction)
+                self.assertIsInstance(LockingTransaction.ensureGet(), LockingTransaction)
+                # Make sure we're getting a unique locking transaction in this auxiliary thread
+                self.assertNotEqual(LockingTransaction.ensureGet(), mainTransaction)
+                # Clean up and remove LockingTransaction we created
+                LockingTransaction.transaction = thread_local()
+                self.assertIsNone(LockingTransaction.get())
             LockingTransaction.runInTransaction(lambda x: x**2)
             self.assertIsInstance(LockingTransaction.get(), LockingTransaction)
             self.assertIsInstance(LockingTransaction.ensureGet(), LockingTransaction)
-            # Make sure we're getting a unique locking transaction in this auxiliary thread
-            self.assertNotEqual(LockingTransaction.ensureGet(), mainTransaction)
-            # Clean up and remove LockingTransaction we created
-            LockingTransaction.transaction = thread_local()
-            self.assertIsNone(LockingTransaction.get())
-        LockingTransaction.runInTransaction(lambda x: x**2)
-        self.assertIsInstance(LockingTransaction.get(), LockingTransaction)
-        self.assertIsInstance(LockingTransaction.ensureGet(), LockingTransaction)
-        t = Thread(target=f, args=[LockingTransaction.ensureGet()])
-        t.start()
-        t.join()
-        # Clean up and remove LockingTransaction we created
-        LockingTransaction.transaction = thread_local()
-        self.assertIsNone(LockingTransaction.get())
+            t = Thread(target=f, args=[LockingTransaction.ensureGet()])
+            t.start()
+            t.join()
+
     def testOrdering_PASS(self):
-        try:
-            LockingTransaction.runInTransaction(lambda x: x**2)
+        with running_transaction(self):
             self.assertEqual(LockingTransaction.ensureGet()._readPoint, -1)
             LockingTransaction.ensureGet()._updateReadPoint()
             self.assertEqual(LockingTransaction.ensureGet()._readPoint, 0)
@@ -90,18 +99,13 @@ class TestLockingTransaction(unittest.TestCase):
             self.assertEqual(LockingTransaction.ensureGet()._readPoint, 1)
             self.assertEqual(LockingTransaction._getCommitPoint(), 2)
             self.assertEqual(LockingTransaction.ensureGet()._readPoint, 1)
-        finally:
-            LockingTransaction.transaction = thread_local()
-    def testTransactionInfo_PASS(self):
-        try:
-            LockingTransaction.runInTransaction(lambda x: x**2)
 
+    def testTransactionInfo_PASS(self):
+        with running_transaction(self):
             # NOTE assumes transactions don't actually work yet (_info is never set)
             self.assertIsNone(LockingTransaction.ensureGet()._info)
-        finally:
-            LockingTransaction.transaction = thread_local()
     def testStop_PASS(self):
-        try:
+        with running_transaction(self):
             LockingTransaction.runInTransaction(lambda x: x**2)
 
             # NOTE assumes transactions don't actually work yet (_info is never set)
@@ -116,6 +120,3 @@ class TestLockingTransaction(unittest.TestCase):
             LockingTransaction.ensureGet()._stop(TransactionState.Committed)
             # No way to check for proper status==Committed here since it sets the countdownlatch then immediately sets itself to none
             self.assertIsNone(LockingTransaction.ensureGet()._info)
-            self.assertIsNone
-        finally:
-            LockingTransaction.transaction = thread_local()
