@@ -915,3 +915,11 @@
             (swap! a dec))
         (a/assert-equal 0 @a))
     (a/assert-equal nil (while (neg? 0))))
+
+(deftest repeatedly-tests
+    (a/assert-equal
+        (repeatedly 5 #(range 2))
+        (take 5 (cycle '((0 1)))))
+    (a/assert-equal
+        (take 5 (cycle '(2)))
+        (let [a 1] (take 5 (repeatedly #(+ 1 a))))))
