@@ -3697,8 +3697,7 @@
   once, but any effects on Refs will be atomic."
   {:added "1.0"}
   [flags-ignored-for-now & body]
-  `(. ~'clojure.lang.lockingtransaction
-      (~'runInTransaction (fn [] ~@body))))
+  `(.runInTransaction clojure.lang.lockingtransaction/LockingTransaction (fn [] ~@body)))
 
 (defmacro dosync
   "Runs the exprs (in an implicit do) in a transaction that encompasses
