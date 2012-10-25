@@ -1,9 +1,17 @@
-from cljexceptions import IllegalStateException
+from cljexceptions import IllegalStateException, TransactionRetryException
 
 from itertools import count
 from threadutil import AtomicInteger
 from threading import local as thread_local
 from threading import Lock
+from time import time
+
+# How many times to retry a transaction before giving up
+RETRY_LIMIT = 10000
+# How long to wait to acquire a read or write lock for a ref
+LOCK_WAIT_SECS = .1 #(100 ms)
+# How long a transaction must be alive for before it is considered old enough to survive barging
+BARGE_WAIT_SECS = .1 #(10 * 1000000ns)
 
 # Possible status values
 class TransactionState:
@@ -12,7 +20,7 @@ class TransactionState:
 class Info:
     def __init__(self, status, startPoint):
         self.status = AtomicInteger(status)
-        self.startPoint = status
+        self.startPoint = startPoint
         # We need to synchronize access to status+latch in stop()
         self.lock = Lock()
 
@@ -33,12 +41,14 @@ class LockingTransaction():
 
     def _resetData(self):
         self._info = None
+        self._startPoint = None # time since epoch (time.time())
         self._vals = {}
-        self._sets = set()
+        self._sets = []
         self._commutes = {} # TODO sorted dict
+        self._ensures = []
 
     def __init__(self):
-        self._readPoint = -1
+        self._readPoint = -1 # global ordering on transactions (int)
         self._resetData()
 
     def _updateReadPoint(self):
@@ -49,7 +59,7 @@ class LockingTransaction():
     @classmethod
     def _getCommitPoint(cls):
         """
-        Gets the next transaction counter id, but simply returns it for use instead of
+        Gets the next transaction counter id, but simply returns it for use instead of 
         updating any internal fields.
         """
         return cls.transactionCounter.next()
@@ -66,7 +76,99 @@ class LockingTransaction():
                 # self._latch
             self._resetData()
 
-    # def _tryWriteLock(self, ref):
+    def _tryWriteLock(self, ref):
+        """
+        Attempts to get a write lock for the desired ref, but only waiting for LOCK_WAIT_SECS
+        If acquiring the lock is not possible, throws a retry exception to force a retry for the
+        current transaction
+        """
+        if not ref._lock.acquire(LOCK_WAIT_SECS):
+            raise TransactionRetryException
+
+    def _releaseIfEnsured(self, ref):
+        """
+        Release the given ref from the set of ensured refs, if this ref is ensured
+        """
+        if ref in self._ensures:
+            self._ensures.remove(ref)
+            ref._lock.release_shared()
+
+    def _barge(self, other_refinfo):
+        """
+        Attempts to barge another running transaction, described by that transactions's Info
+        object.
+
+        Barging is successful iff:
+
+        1) This transaction is at least BARGE_WAIT_SECS old
+        2) This transaction is older than the other transasction
+        3) The other transaction is Running and an compareAndSet operation to Killed
+            must be successful
+
+        Returns if this barge was successful or not
+        """
+        # print "Trying to barge: ", time() - self._startPoint, " ", self._startPoint, " < ", other_refinfo.startPoint
+        if time() - self._startPoint > BARGE_WAIT_SECS and \
+           self._startPoint < other_refinfo.startPoint:
+           return other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed)
+        
+        return False
+
+    def _blockAndBail(self, other_refinfo):
+        """
+        This is a time-delayed retry of the current transaction. If we know there was a conflict on a ref
+        with other_refinfo's transaction, we give it LOCK_WAIT_SECS to complete before retrying ourselves,
+        to reduce contention and re-conflicting with the same transaction in the future.
+        """
+        self._stop(TransactionState.Retry)
+        # TODO Wait for CountdownLatch for LOCK_WAIT_SECS
+        raise TransactionRetryException
+
+    def _takeOwnership(self, ref):
+        """
+        This associates the given ref with this transaction. It is called when a transaction modifies
+        a reference in doSet(). It does the following:
+
+        0) Releases any read locks (ensures) on the ref, as a alter/set after an ensure
+            undoes the ensure operation
+        1) Marks the reference as having been modified in this transaction
+        2) Checks if the ref has a newer committed value than the transaction-try start point, and retries this
+            transaction if so
+        3) Checks if the ref is currently owned by another transaction (has a in-transaction-value in another transaction)
+            If so, attempts to barge the other transaction. If it fails, forces a retry
+        4) Otherwise, it associates the ref with this transaction by setting the ref's _info to this Info
+        5) Returns the most recently committed value for this ref
+
+
+        This method is called 'lock' in the Clojure/Java implementation
+        """
+        self._releaseIfEnsured(ref)
+
+        # We might get a retry exception, unlock lock if we have locked it
+        unlocked = True
+        try:
+            self._tryWriteLock(ref)
+            unlocked = False
+
+            if ref._tvals and ref._tvals.point > self._readPoint:
+                # Newer committed value than when we started our transaction try
+                raise TransactionRetryException
+
+            refinfo = ref._tinfo
+            if refinfo and refinfo != self._info and refinfo.running():
+                # This ref has an in-transaction-value in some *other* transaction
+                if not self._barge(refinfo):
+                    # We lost the barge attempt, so we retry
+                    ref._lock.release()
+                    unlocked = True
+                    return self._blockAndBail(refinfo)
+            # We own this ref
+            ref._tinfo = self._info
+            return ref._tvals.val if ref._tvals else None
+        finally:
+            # If we locked the mutex but need to retry, unlock it on our way out
+            if not unlocked:
+                ref._lock.release()
 
     ### External API
     @classmethod

@@ -33,6 +33,7 @@ class Ref(ARef):
         super(Ref, self).__init__(meta)
         self._id = refids.next()
         self._faults = AtomicInteger(0)
+        self._tinfo = None
         # NOTE SharedLock is also re-entrant.
         # TODO disable logging + debug when ready
         def xprint(x):
