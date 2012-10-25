@@ -719,13 +719,6 @@
      (assoc m k (apply update-in (get m k) ks f args))
      (assoc m k (apply f (get m k) args)))))
 
-(defn empty?
-  "Returns true if coll has no items - same as (not (seq coll)).
-  Please use the idiom (seq x) rather than (not (empty? x))"
-  {:added "1.0"
-   :static true}
-  [coll] (not (seq coll)))
-
 (defn ifn?
   "Returns true if x implements IFn. Note that many data structures
   (e.g. sets and maps) implement IFn"
@@ -785,16 +778,6 @@
          ret)))
   ([f & args]
      (trampoline #(apply f args))))
-
-(defmacro while
-  "Repeatedly executes body while test expression is true. Presumes
-  some side-effect will cause test to become false/nil. Returns nil"
-  {:added "1.0"}
-  [test & body]
-  `(loop []
-     (when ~test
-       ~@body
-       (recur))))
 
 (defn memoize
   "Returns a memoized version of a referentially transparent function. The

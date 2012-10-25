@@ -903,3 +903,15 @@
     (a/assert-equal (with-redefs [class (constantly nil)]
                       (class [])) nil)
     (a/assert-equal (class []) (type []))) ; Make sure variables are restored properly by with-redefs
+
+(deftest empty-tests
+    (a/assert-true (empty? '()))
+    (a/assert-true (empty? {}))
+    (a/assert-true (empty? #{})))
+
+(deftest while-tests
+    (let [a (atom 10)]
+        (while (pos? @a)
+            (swap! a dec))
+        (a/assert-equal 0 @a))
+    (a/assert-equal nil (while (neg? 0))))
