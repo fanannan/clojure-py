@@ -5,7 +5,7 @@ Thursday, Oct. 25 2012"""
 import unittest
 
 from clojure.lang.ref import Ref, TVal
-from clojure.lang.lockingtransaction import LockingTransaction
+from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info
 from clojure.lang.cljexceptions import IllegalStateException
 from clojure.util.shared_lock import SharedLock
 
@@ -80,5 +80,42 @@ class TestLockingTransaction(unittest.TestCase):
         # Clean up and remove LockingTransaction we created
         LockingTransaction.transaction = thread_local()
         self.assertIsNone(LockingTransaction.get())
+    def testOrdering_PASS(self):
+        try:
+            LockingTransaction.runInTransaction(lambda x: x**2)
+            self.assertEqual(LockingTransaction.ensureGet()._readPoint, -1)
+            LockingTransaction.ensureGet()._updateReadPoint()
+            self.assertEqual(LockingTransaction.ensureGet()._readPoint, 0)
+            LockingTransaction.ensureGet()._updateReadPoint()
+            self.assertEqual(LockingTransaction.ensureGet()._readPoint, 1)
+            self.assertEqual(LockingTransaction._getCommitPoint(), 2)
+            self.assertEqual(LockingTransaction.ensureGet()._readPoint, 1)
+        finally:
+            LockingTransaction.transaction = thread_local()
     def testTransactionInfo_PASS(self):
-        # TODO
+        try:
+            LockingTransaction.runInTransaction(lambda x: x**2)
+
+            # NOTE assumes transactions don't actually work yet (_info is never set)
+            self.assertIsNone(LockingTransaction.ensureGet()._info)
+        finally:
+            LockingTransaction.transaction = thread_local()
+    def testStop_PASS(self):
+        try:
+            LockingTransaction.runInTransaction(lambda x: x**2)
+
+            # NOTE assumes transactions don't actually work yet (_info is never set)
+            self.assertIsNone(LockingTransaction.ensureGet()._info)
+            LockingTransaction.ensureGet()._stop(TransactionState.Killed)
+            self.assertIsNone(LockingTransaction.ensureGet()._info)
+
+            # Fake running transaction
+            LockingTransaction.ensureGet()._info = Info(TransactionState.Running, LockingTransaction.ensureGet()._readPoint)
+            self.assertIsNotNone(LockingTransaction.ensureGet()._info)
+            self.assertEqual(LockingTransaction.ensureGet()._info.status.get(), TransactionState.Running)
+            LockingTransaction.ensureGet()._stop(TransactionState.Committed)
+            # No way to check for proper status==Committed here since it sets the countdownlatch then immediately sets itself to none
+            self.assertIsNone(LockingTransaction.ensureGet()._info)
+            self.assertIsNone
+        finally:
+            LockingTransaction.transaction = thread_local()

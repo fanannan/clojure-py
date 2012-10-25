@@ -25,6 +25,7 @@ class TVal:
             self.next = self
 
 # TODO only thread-safe in cPython
+# TODO is this the best way of doing a "global static" or is there a more pythonic way?
 refids = count()
 
 class Ref(ARef):
