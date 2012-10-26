@@ -7,6 +7,7 @@ from threading import Thread, current_thread
 from threading import local as thread_local
 from contextlib import contextmanager
 from time import time, sleep
+from itertools import count
 
 from clojure.lang.ref import Ref, TVal
 from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info
@@ -66,6 +67,8 @@ class TestRef(unittest.TestCase):
 def running_transaction(thetest):
     # Fake a running transaction
     LockingTransaction.transaction.data = LockingTransaction()
+    LockingTransaction.ensureGet()._readPoint = -1
+    LockingTransaction.transactionCounter = count()
     LockingTransaction.ensureGet()._startPoint = time()
     LockingTransaction.ensureGet()._info = Info(TransactionState.Running, LockingTransaction.ensureGet()._startPoint)
     yield
@@ -257,4 +260,35 @@ class TestLockingTransaction(unittest.TestCase):
             self.assertRaises(TransactionRetryException, t._takeOwnership, self.refZero)
             self.assertRaises(Exception, self.refZero._lock.release)
 
+    def testGetRef_PASS(self):
+        # No running transaction
+        self.assertRaises(TransactionRetryException, LockingTransaction().getRef, self.refZero)
+        with running_transaction(self):
+            t = LockingTransaction.ensureGet()
 
+            # Ref has a previously committed value and no in-transaction-value, so check it
+            # Since we're faking this test, we need our read point to be > 0
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            self.assertEqual(t.getRef(self.refZero), 0)
+            # Make sure we unlocked the ref's lock
+            self.assertRaises(Exception, self.refZero._lock.release_shared)
+
+            # Give the ref some history and see if it still works. Our read point is 1 and our new value was committed at time 3
+            self.refZero._tvals = TVal(100, 3, time(), self.refZero._tvals)
+            self.assertEqual(t.getRef(self.refZero), 0)
+
+            # Now we want the latest value
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            self.assertEqual(t.getRef(self.refZero), 100)
+
+            # Force the oldest val to be too new to get a fault
+            # Now we have a val at history point 2 and 3
+            self.refZero._tvals.next.point = 2
+            t._readPoint = 1
+
+            # We should retry and update our faults
+            self.assertRaises(TransactionRetryException, t.getRef, self.refZero)
+            self.assertEqual(self.refZero._faults.get(), 1)

@@ -170,6 +170,44 @@ class LockingTransaction():
             if not unlocked:
                 ref._lock.release()
 
+    def getRef(self, ref):
+        """
+        Returns a value for the desired ref in this transaction. Ensures that a transaction is running, and
+        returns *either* the latest in-transaction-value for this ref (is there is one), or the latest committed
+        value that was committed before the start of this transaction.
+
+        If there is no committed value for this ref before this transaction began, it records a fault for the ref,
+        and triggers a retry
+        """
+        if not self._info or not self._info.running():
+            raise TransactionRetryException
+
+        # Return in-transaction-value if we have one
+        if ref in self._vals:
+            return self._vals[ref]
+
+        # Might raise a retry exception
+        try:
+            ref._lock.acquire_shared()
+            if not ref._tvals:
+                raise IllegalStateException("Ref in transaction doRef is unbound! ", ref)
+
+            historypoint = ref._tvals
+            while True:
+                if historypoint.point < self._readPoint:
+                    return historypoint.val
+
+                # Get older history value, if we loop around to the front we're done
+                historypoint = historypoint.prev
+                if historypoint == ref._tvals:
+                    break
+        finally:
+            ref._lock.release_shared()
+
+        # Could not find an old-enough committed value, fault!
+        ref._faults.getAndIncrement()
+        raise TransactionRetryException
+
     ### External API
     @classmethod
     def get(cls):
