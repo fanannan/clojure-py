@@ -226,6 +226,38 @@ class LockingTransaction():
         self._vals[ref] = val
         return val
 
+    def doEnsure(self, ref):
+        """
+        Ensuring a ref means that no other transactions can change this ref until this transaction is finished.
+        """
+        if not self._info or not self._info.running():
+            raise TransactionRetryException
+
+        # If this ref is already ensured, no more work to do
+        if ref in self._ensures:
+            return
+
+        # Ensures means we have a read lock (so no one else can write)
+        ref._lock.acquire_shared()
+
+        if ref._tvals and ref._tvals.point > self._readPoint:
+            # Ref was committed since we started our transaction (since we got our world snapshot)
+            # We bail out and retry since we've already 'lost' the ensuring
+            ref._lock.release_shared()
+            raise TransactionRetryException
+
+        refinfo = ref._tinfo
+
+        if refinfo and refinfo.running():
+            # Someone's writing to it (has called _takeOwnership)
+            # Let go of our reader lock, ensure means some transaction's already owned it
+            ref.lock.release_shared()
+            if refinfo != self._info:
+                # Not our ref, ensure fails!
+                self._blockAndBail(refinfo)
+        else:
+            self._ensures.append(ref)
+
     ### External API
     @classmethod
     def get(cls):

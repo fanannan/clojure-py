@@ -305,3 +305,41 @@ class TestLockingTransaction(unittest.TestCase):
             self.assertTrue(self.refZero in t._vals)
             self.assertEqual(t._vals[self.refZero], 200)
             self.assertEqual(self.refZero._tinfo, t._info)
+
+    def testEnsures_PASS(self):
+        with running_transaction(self):
+            t = LockingTransaction.ensureGet()
+
+            # Try a normal ensure. Will fail as t has readPoint of -1 and ref has oldest commit point at 0
+            self.assertRaises(TransactionRetryException, t.doEnsure, self.refZero)
+            self.assertRaises(Exception, self.refZero._lock.release_shared)
+
+            # Now set our transaction to be further in the future, ensure works
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            t.doEnsure(self.refZero)
+            self.assertTrue(self.refZero in t._ensures)
+            # Try again
+            t.doEnsure(self.refZero)
+            # Make sure it's read by releasing the lock exactly once w/out error
+            self.refZero._lock.release_shared()
+            self.assertRaises(Exception, self.refZero._lock.release_shared)
+
+    def testEnsures_FAIL(self):
+        with running_transaction(self):
+            t = LockingTransaction.ensureGet()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+
+            # Make another transaction to simulate a conflict (failed ensure)
+            # First, write to it in this thread
+            t.doSet(self.refZero, 999)
+            def secondary(testclass, mainTransaction):
+                t = LockingTransaction.ensureGet()
+                LockingTransaction.ensureGet()._updateReadPoint()
+                LockingTransaction.ensureGet()._updateReadPoint()
+
+                # Try an ensure that will fail (and cause a bail)
+                testclass.assertRaises(TransactionRetryException, t.doEnsure(testclass.refZero))
+                self.assertRaises(Exception, self.refZero._lock.release_shared)
+                    
