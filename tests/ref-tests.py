@@ -67,10 +67,10 @@ class TestRef(unittest.TestCase):
 def running_transaction(thetest):
     # Fake a running transaction
     LockingTransaction.transaction.data = LockingTransaction()
+    LockingTransaction.transaction.data._info = Info(TransactionState.Running, LockingTransaction.transaction.data._startPoint)
     LockingTransaction.ensureGet()._readPoint = -1
     LockingTransaction.transactionCounter = count()
     LockingTransaction.ensureGet()._startPoint = time()
-    LockingTransaction.ensureGet()._info = Info(TransactionState.Running, LockingTransaction.ensureGet()._startPoint)
     yield
     # Clean up and remove LockingTransaction we created
     LockingTransaction.transaction = thread_local()
@@ -90,6 +90,7 @@ class TestLockingTransaction(unittest.TestCase):
         def thread_func(testclass, mainTransaction, funcToRun):
             self.assertIsNone(LockingTransaction.get())
             LockingTransaction.transaction.data = LockingTransaction()
+            LockingTransaction.transaction.data._info = Info(TransactionState.Running, LockingTransaction.transaction.data._startPoint)
             funcToRun(testclass, mainTransaction)
             LockingTransaction.transaction = thread_local()
             self.assertIsNone(LockingTransaction.get())
@@ -247,7 +248,6 @@ class TestLockingTransaction(unittest.TestCase):
             def secondary(testclass, mainTransaction):
                 t = LockingTransaction.ensureGet()
                 t._startPoint = time()
-                t._info = Info(TransactionState.Running, t._startPoint)
                 # We own the ref now
                 testclass.refZero._tinfo = t._info
 
@@ -346,4 +346,23 @@ class TestLockingTransaction(unittest.TestCase):
 
     def testRun_PASS(self):
         # Now we'll run a transaction ourselves
-        
+        self.refOne = Ref(111, None)
+        self.refTwo = Ref(222, None)
+
+        # Our transaction body will do a ref-set and an alter (increment a ref by 1)
+        def body():
+            # Body of the transaction!
+            self.refZero.refSet(999)
+            def incr(val):
+                return val + 1
+            self.refOne.alter(incr, None)
+
+        # Test our transaction actually made the changes it should have
+        LockingTransaction.runInTransaction(body)
+        self.assertEqual(self.refZero.deref(), 999)
+        self.assertEqual(self.refOne.deref(), 112)
+        self.assertEqual(self.refTwo.deref(), 222)
+
+        # Test that the transaction ended properly
+        self.assertRaises(IllegalStateException, self.refZero.refSet, 999)
+
