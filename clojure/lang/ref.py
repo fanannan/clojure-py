@@ -34,11 +34,11 @@ class Ref(ARef):
         self._id = refids.next()
         self._faults = AtomicInteger(0)
         self._tinfo = None
+        self._maxHistory = 10
+        self._minHistory = 0
         # NOTE SharedLock is also re-entrant.
-        # TODO disable logging + debug when ready
-        def xprint(x):
-            print(x + "\n")
-        self._lock = SharedLock(None, True)
+        # TODO enable logging + debug when needed
+        self._lock = SharedLock(None, False)
         self._tvals = TVal(state, 0, ms_since_epoch())
 
     def _currentVal(self):
@@ -59,7 +59,7 @@ class Ref(ARef):
         transaction, or returns the last committed value of ref"""
         transaction = LockingTransaction.get()
         if transaction:
-            return transaction.doGet(self)
+            return transaction.getRef(self)
         return self._currentVal()
 
     def refSet(self, state):
@@ -73,7 +73,7 @@ class Ref(ARef):
         """
         Alters the value of this ref, and returns the new state"""
         transaction = LockingTransaction.ensureGet()
-        transaction.doSet(self, apply(fn, RT.cons(transaction.doGet(self), *args)))
+        transaction.doSet(self, apply(fn, RT.cons(transaction.getRef(self), *args)))
 
     def commute(self, fn, *args):
         """
@@ -118,7 +118,7 @@ class Ref(ARef):
             count += 1
         return count
 
-    def getHistoryCount(self):
+    def historyCount(self):
         """
         Return the length of the tvals history chain. Requires a traversal and a read lock"""
         try:
@@ -126,3 +126,28 @@ class Ref(ARef):
             return self._historyCount()
         finally:
             self._lock.release_shared()
+
+    def minHistory(self):
+        """
+        Returns the minimum history length for this ref
+        """
+        return self._minHistory
+
+    def setMinHistory(self, minHistory):
+        """
+        Sets the minimum history chain length for this reference
+        """
+        self._minHistory = minHistory
+
+    def maxHistory(self):
+        """
+        Returns the maximum history length for this ref
+        """
+        return self._maxHistory
+
+    def setMaxHistory(self, maxhistory):
+        """
+        Sets the maximum history chain length for this reference
+        """
+        self._maxHistory = maxHistory
+

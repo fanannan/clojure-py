@@ -56,10 +56,10 @@ class TestRef(unittest.TestCase):
     def testBound_PASS(self):
         self.assertTrue(self.refOne.isBound())
     def testHistoryLen_PASS(self):
-        self.assertEqual(self.refOne.getHistoryCount(), 1)
+        self.assertEqual(self.refOne.historyCount(), 1)
     def testTrimHistory_PASS(self):
         self.refOne.trimHistory()
-        self.assertEqual(self.refOne.getHistoryCount(), 1)
+        self.assertEqual(self.refOne.historyCount(), 1)
 
 # TODO refactor to use setupClass and teardownClass, initial attempt didn't
 #      seem to work
@@ -255,6 +255,7 @@ class TestLockingTransaction(unittest.TestCase):
             self.secondary_op(secondary)
 
             # We fake being newer, so we aren't allowed to barge an older transaction
+            sleep(.2)
             t._startPoint = time()
             t._info.startPoint = time()
             self.assertRaises(TransactionRetryException, t._takeOwnership, self.refZero)
@@ -342,4 +343,7 @@ class TestLockingTransaction(unittest.TestCase):
                 # Try an ensure that will fail (and cause a bail)
                 testclass.assertRaises(TransactionRetryException, t.doEnsure(testclass.refZero))
                 self.assertRaises(Exception, self.refZero._lock.release_shared)
-                    
+
+    def testRun_PASS(self):
+        # Now we'll run a transaction ourselves
+        

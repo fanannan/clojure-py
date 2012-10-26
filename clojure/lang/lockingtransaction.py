@@ -46,6 +46,7 @@ class LockingTransaction():
         self._sets = []
         self._commutes = {} # TODO sorted dict
         self._ensures = []
+        self._actions = [] # Deferred agent actions
 
     def __init__(self):
         self._readPoint = -1 # global ordering on transactions (int)
@@ -258,13 +259,132 @@ class LockingTransaction():
         else:
             self._ensures.append(ref)
 
+    def run(self, fn):
+        """
+        Main STM entry point---run the desired 0-args function in a transaction, capturing all modifications
+        that happen, atomically applying them during the commit step.
+        """
+        done = False
+        i = 0
+        locked = []
+        notify = []
+
+        while i < RETRY_LIMIT and not done:
+            try:
+                # Update the read point of this transaction try so we see a new snapshot of the world
+                self._updateReadPoint()
+
+                if i == 0:
+                    # First run, do some extra setup:
+                    #  set our start point (of the overall transaction) to now
+                    self._startPoint = self._readPoint
+                    self._startTime = time()
+
+                # Set the info for this transaction try. We are now Running!
+                self._info = Info(TransactionState.Running, self._startPoint)
+
+                # Run our user code in the transaction!
+                returnValue = apply(fn)
+
+                # Make sure we're still alive, and if so transition to the commit stage
+                if self._info.status.compareAndSet(TransactionState.Running, TransactionState.Committing):
+                    # Handle commutes first
+                    for ref in self._commutes:
+                        # TODO
+                        pass
+
+                    # Acquire a write lock for all refs that were assigned to. We'll need to change all of their values
+                    # If we can't, another transaction is committing so we retry
+                    for ref in self._sets:
+                        self._tryWriteLock(ref)
+                        locked.append(ref)
+
+                    # Call validators on each ref about to be changed to make sure the change is allowed
+                    for ref in self._vals:
+                        # TODO
+                        # ref.validate(ref.validator, self._vals[ref])
+                        pass
+
+                    # Now everything is ready to write: locks held, validators run, we are good to go
+                    commitTime = time()
+                    commitPoint = self._getCommitPoint()
+
+                    # Apply changes to each ref
+                    for ref in self._vals:
+                        oldValue = ref._tvals.val if ref._tvals else None
+                        newVal = self._vals[ref]
+
+                        historyLength = ref.historyCount()
+
+                        # Easy case: ref has no binding, so lets give it one
+                        if not ref._tvals:
+                            ref._tvals = TVal(newVal, commitPoint, self._startTime)
+                        # Add this new value to the tvals history chain. This happens if:
+                        #  1. historyCount is less than minHistory
+                        #  2. the ref's faults > 0 and the history chain is < maxHistory
+                        elif ref._faults.get() > 0 and historyLength < ref.maxHistory() or \
+                               historyLength < ref.minHistory():
+                            ref._tvals = TVal(newVal, commitPoint, self._startTime, ref._tvals)
+                            ref._faults.set(0)
+                        # Otherwise, we recycle the oldest ref in the chain, and make it the newest
+                        else:
+                            ref._tvals = ref._tvals.next
+                            ref._tvals.val = newVal
+                            ref._tvals.point = commitPoint
+                            ref._tvals.msecs = self._startTime
+
+                        # TODO notify watchers of new value by adding to notify list
+                        # if ref.wat
+                        #   notify.append()
+
+                    # That's it for the commit!
+                    done = True
+                    self._info.status.set(TransactionState.Committed)
+            except TransactionRetryException:
+                # Just keep on looping
+                pass
+            finally:
+                # Clean up after ourselves, release every read lock we acquired before, last first
+                locked.reverse()
+                for ref in locked:
+                    ref._lock.release()
+                locked = []
+
+                # Release any ensure'd read-locked refs
+                for ref in self._ensures:
+                    ref._lock.release_shared()
+                self._ensures = []
+
+                # Set our state to either stopped or retry, depending on if we successfully committed
+                self._stop(TransactionState.Committed if done else TransactionState.Retry)
+
+                # Send notifications to everyone who needs them, since we just committed all our changes
+                try:
+                    if done:
+                        for notifier in notify:
+                            # TODO notify
+                            pass
+                        for action in self._actions:
+                            # TODO actions
+                            pass
+                finally:
+                    notify = []
+                    # actions to agent
+                    # actions []
+
+            i += 1
+
+        if not done:
+            raise CljException("Transaction failed after reaching retry limit :'(")
+        return returnValue
+
     ### External API
     @classmethod
     def get(cls):
         """
         Returns the per-thread singleton transaction
         """
-        if 'data' in cls.transaction.__dict__:
+        if 'data' in cls.transaction.__dict__ and cls.transaction.data._info:
             return cls.transaction.data
         else:
             return None
@@ -275,8 +395,8 @@ class LockingTransaction():
         Returns the per-thread singleton transaction, or raises
         an IllegalStateException if one is not running
         """
-        if 'data' in cls.transaction.__dict__:
-            return cls.transaction.data
+        if cls.get():
+            return cls.get()
         else:
             raise IllegalStateException("No transaction running")
 
@@ -289,4 +409,9 @@ class LockingTransaction():
         if not transaction:
             transaction = LockingTransaction()
             cls.transaction.data = transaction
-        # TODO
+        
+        if transaction._info:
+            # Already running transaction... execute current transaction in it. No nested transactions in the same thread
+            return apply(fn)
+
+        return transaction.run(fn)
