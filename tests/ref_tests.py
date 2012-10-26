@@ -292,3 +292,16 @@ class TestLockingTransaction(unittest.TestCase):
             # We should retry and update our faults
             self.assertRaises(TransactionRetryException, t.getRef, self.refZero)
             self.assertEqual(self.refZero._faults.get(), 1)
+
+    def testDoSet_PASS(self):
+        with running_transaction(self):
+            t = LockingTransaction.ensureGet()
+            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint()
+
+            # Do the set and make sure it was set in our various transaction state vars
+            t.doSet(self.refZero, 200)
+            self.assertTrue(self.refZero in t._sets)
+            self.assertTrue(self.refZero in t._vals)
+            self.assertEqual(t._vals[self.refZero], 200)
+            self.assertEqual(self.refZero._tinfo, t._info)

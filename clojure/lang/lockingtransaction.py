@@ -208,6 +208,24 @@ class LockingTransaction():
         ref._faults.getAndIncrement()
         raise TransactionRetryException
 
+    def doSet(self, ref, val):
+        """
+        Sets the in-transaction-value of the desired ref to the given value
+        """
+        if not self._info or not self._info.running():
+            raise TransactionRetryException
+
+        # Can't alter after a commute
+        if ref in self._commutes:
+            raise IllegalStateException("Can't set/alter a ref in a transaction after a commute!")
+
+        if not ref in self._sets:
+            self._sets.append(ref)
+            self._takeOwnership(ref)
+
+        self._vals[ref] = val
+        return val
+
     ### External API
     @classmethod
     def get(cls):
