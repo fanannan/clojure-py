@@ -101,6 +101,7 @@ class Ref(ARef):
         tval = self._tvals.next
         while tval != self._tvals:
             count += 1
+            tval = tval.next
         return count
 
     def historyCount(self):
