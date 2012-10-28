@@ -58,13 +58,13 @@ class Ref(ARef):
         """
         Alters the value of this ref, and returns the new state"""
         transaction = LockingTransaction.ensureGet()
-        transaction.doSet(self, apply(fn, RT.cons(transaction.getRef(self), *args)))
+        return transaction.doSet(self, apply(fn, RT.cons(transaction.getRef(self), *args)))
 
     def commute(self, fn, *args):
         """
         Commutes the value of this ref, allowing for it to be updated by other transactions before the
         commuting function is called"""
-        LockingTransaction.ensureGet().doCommute(self, fn, *args)
+        return LockingTransaction.ensureGet().doCommute(self, fn, *args)
 
     def touch(self):
         """

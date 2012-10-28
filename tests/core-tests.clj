@@ -910,12 +910,13 @@
         (a/assert-equal (deref r) nil)
         (a/assert-equal @r nil))
     (let [r (ref :a)]
-        (a/assert-equal (ref-set r :b) :b)
+        (a/assert-equal (dosync (ref-set r :b)) :b)
         (a/assert-equal @r :b))
     (let [r (ref [:a])]
-        (a/assert-equal (alter r conj :b) [:a :b]))
-    (let [r (ref [:a])]
-        (a/assert-equal (commute r conj :b) [:a :b]))
+        (a/assert-equal (dosync (alter r conj :b)) [:a :b])
+        (a/assert-equal @r [:a :b]))
+    ; (let [r (ref [:a])]
+        ; (a/assert-equal (dosync (commute r conj :b)) [:a :b]))
     (a/assert-equal (sync nil :a) :a)
     (a/assert-equal (sync nil :a :b :c) :c)
     (a/assert-equal (dosync :a :z :f) :f))
