@@ -123,9 +123,9 @@ class TestThreadedTransactions(unittest.TestCase):
             # self.assertEqual()
             self.assertEqual(val, 6)
 
-            # self.d("* Refsetting after fault")
-            # # When committed, we should create another tval in the history chain
-            # self.refA.refSet(7)
+            self.d("* Refsetting after fault")
+            # When committed, we should create another tval in the history chain
+            self.refA.refSet(7)
 
         def t2():
             self.wait(t1launched)
@@ -147,7 +147,8 @@ class TestThreadedTransactions(unittest.TestCase):
 
         self.join_all()
 
-
+        # The write after the fault should have created a new history chain item
+        self.assertEqual(self.refA.historyCount(), 2)
         self.d("Len: %s" % self.refA.historyCount())
 
     def testBarge(self):
