@@ -2,27 +2,12 @@ from aref import ARef
 from cljexceptions import IllegalStateException
 from threadutil import AtomicInteger, ms_since_epoch
 from clojure.util.shared_lock import SharedLock
+from clojure.lang.util import TVal
 from lockingtransaction import LockingTransaction
 
 import clojure.lang.rt as RT
 
 from itertools import count
-
-class TVal:
-    def __init__(self, val, point, msecs, prev = None):
-        self.val = val
-        self.point = point
-        self.msecs = msecs
-
-        # If we are passed prev, add ourselves to the end of the linked list
-        if prev:
-            self.prev = prev
-            self.next = prev.next
-            self.prev.next = self
-            self.next.prev = self
-        else:
-            self.prev = self
-            self.next = self
 
 # TODO only thread-safe in cPython
 # TODO is this the best way of doing a "global static" or is there a more pythonic way?

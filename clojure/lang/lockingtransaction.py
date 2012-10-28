@@ -1,4 +1,5 @@
 from cljexceptions import IllegalStateException, TransactionRetryException
+from clojure.lang.util import TVal
 
 from itertools import count
 from threadutil import AtomicInteger
