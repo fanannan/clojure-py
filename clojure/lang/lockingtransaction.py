@@ -42,7 +42,7 @@ class LockingTransaction():
 
     def _resetData(self):
         self._info = None
-        self._startPoint = None # time since epoch (time.time())
+        self._startPoint = -1 # time since epoch (time.time())
         self._vals = {}
         self._sets = []
         self._commutes = {} # TODO sorted dict
