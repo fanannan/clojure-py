@@ -5,7 +5,7 @@ import clojure.lang.rt as RT
 from itertools import count
 from threadutil import AtomicInteger
 from threading import local as thread_local
-from threading import Lock, Event
+from threading import Lock, Event, current_thread
 from time import time
 
 # How many times to retry a transaction before giving up
@@ -15,7 +15,7 @@ LOCK_WAIT_SECS = 0.1 #(100 ms)
 # How long a transaction must be alive for before it is considered old enough to survive barging
 BARGE_WAIT_SECS = 0.1 #(10 * 1000000ns)
 
-spew_debug = True
+spew_debug = False
 
 # Possible status values
 class TransactionState:
@@ -27,8 +27,9 @@ def log(msg):
     Thread-safe logging, can't get logging module to spit out debug output
     when run w/ nosetests :-/
     """
-    with loglock:
-        print("Thread: %s (%s): %s" % (current_thread().ident, id(current_thread()), msg))
+    if spew_debug:
+        with loglock:
+            print("Thread: %s (%s): %s" % (current_thread().ident, id(current_thread()), msg))
 
 class Info:
     def __init__(self, status, startPoint):
@@ -65,6 +66,13 @@ class LockingTransaction():
         self._readPoint = -1 # global ordering on transactions (int)
         self._resetData()
 
+    def _retry(self, debug_msg):
+        """
+        Raises a retry exception, with additional message for debugging
+        """
+        log(debug_msg)
+        raise TransactionRetryException
+
     def _updateReadPoint(self):
         """
         Update the read point of this transaction to the next transaction counter id"""
@@ -96,7 +104,7 @@ class LockingTransaction():
         current transaction
         """
         if not ref._lock.acquire(LOCK_WAIT_SECS):
-            raise TransactionRetryException
+            self._retry("RETRY - Failed to acquire write lock in _tryWriteLock. Owned by %s" % ref._tinfo.thread_id if ref._tinfo else None)
 
     def _releaseIfEnsured(self, ref):
         """
@@ -125,6 +133,7 @@ class LockingTransaction():
             self._startPoint < other_refinfo.startPoint:
             if other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed):
                 # We barged them successfully, set their "latch" to 0 by setting it to true
+                # log("BARGED THEM: %s" % other_refinfo.thread_id)
                 other_refinfo.latch.set()
         
         return False
@@ -138,7 +147,7 @@ class LockingTransaction():
         self._stop(TransactionState.Retry)
         other_refinfo.latch.wait(LOCK_WAIT_SECS)
 
-        raise TransactionRetryException
+        self._retry("RETRY - Blocked and now bailing")
 
     def _takeOwnership(self, ref):
         """
@@ -168,7 +177,7 @@ class LockingTransaction():
 
             if ref._tvals and ref._tvals.point > self._readPoint:
                 # Newer committed value than when we started our transaction try
-                raise TransactionRetryException
+                self._retry("RETRY - Newer committed value when taking ownership")
 
             refinfo = ref._tinfo
             if refinfo and refinfo != self._info and refinfo.running():
@@ -177,6 +186,8 @@ class LockingTransaction():
                     # We lost the barge attempt, so we retry
                     ref._lock.release()
                     unlocked = True
+                    # log("BARGE FAILED other: %s (%s != %s ? %s (running? %s))" % 
+                            # (refinfo.thread_id, refinfo, self._info, refinfo != self._info, refinfo.running()))
                     return self._blockAndBail(refinfo)
             # We own this ref
             ref._tinfo = self._info
@@ -196,13 +207,14 @@ class LockingTransaction():
         and triggers a retry
         """
         if not self._info or not self._info.running():
-            raise TransactionRetryException
+            self._retry("RETRY - Not running in getRef")
 
         # Return in-transaction-value if we have one
         if ref in self._vals:
             return self._vals[ref]
 
         # Might raise a retry exception
+        log("Trying to get: %s" % ref)
         try:
             ref._lock.acquire_shared()
             if not ref._tvals:
@@ -210,6 +222,7 @@ class LockingTransaction():
 
             historypoint = ref._tvals
             while True:
+                # log("Checking: %s < %s" % (historypoint.point, self._readPoint))
                 if historypoint.point < self._readPoint:
                     return historypoint.val
 
@@ -222,14 +235,14 @@ class LockingTransaction():
 
         # Could not find an old-enough committed value, fault!
         ref._faults.getAndIncrement()
-        raise TransactionRetryException
+        self._retry("RETRY - Fault, no new-enough value!")
 
     def doSet(self, ref, val):
         """
         Sets the in-transaction-value of the desired ref to the given value
         """
         if not self._info or not self._info.running():
-            raise TransactionRetryException
+            self._retry("RETRY - Not running in doSet!")
 
         # Can't alter after a commute
         if ref in self._commutes:
@@ -249,7 +262,7 @@ class LockingTransaction():
         commit time and apply on top of any more recent changes.
         """
         if not self._info or not self._info.running():
-            raise TransactionRetryException
+            self._retry("RETRY - Not running in doCommute!")
 
         # If we don't have an in-transaction-value yet for this ref
         #  get the latest one
@@ -279,7 +292,7 @@ class LockingTransaction():
         Ensuring a ref means that no other transactions can change this ref until this transaction is finished.
         """
         if not self._info or not self._info.running():
-            raise TransactionRetryException
+            self._retry("RETRY - Not running in doEnsure!")
 
         # If this ref is already ensured, no more work to do
         if ref in self._ensures:
@@ -292,7 +305,7 @@ class LockingTransaction():
             # Ref was committed since we started our transaction (since we got our world snapshot)
             # We bail out and retry since we've already 'lost' the ensuring
             ref._lock.release_shared()
-            raise TransactionRetryException
+            self._retry("RETRY - Ref already committed to in doEnsure")
 
         refinfo = ref._tinfo
 
@@ -328,7 +341,11 @@ class LockingTransaction():
                     self._startTime = time()
 
                 # Set the info for this transaction try. We are now Running!
+                # if self._info:
+                    # log("Setting new INFO, but old: %s %s is running? %s" % (self._info, self._info.thread_id, self._info.running()))
                 self._info = Info(TransactionState.Running, self._startPoint)
+                self._info.thread_id = "%s (%s)" % (current_thread().ident, id(current_thread()))
+                # log("new INFO: %s %s running? %s" % (self._info, self._info.thread_id, self._info.running()))
 
                 # Run our user code in the transaction!
                 returnValue = apply(fn)
@@ -350,14 +367,14 @@ class LockingTransaction():
                         self._tryWriteLock(ref)
                         locked.append(ref)
                         if wasEnsured and ref._tvals and ref._tvals.point > self._readPoint:
-                            raise TransactionRetryException
+                            self._retry("RETRY - was ensured and has newer version while commiting")
 
                         other_refinfo = ref._tinfo
                         if other_refinfo and other_refinfo != self._info and other_refinfo.running():
                             # Other transaction is currently running, and owns this ref---meaning it set the
                             #  ref's in-transaction-value already, so we either barge them or retry
                             if not _barge(other_refinfo):
-                                raise TransactionRetryException
+                                self._retry("RETRY - conflicting commutes being commited and barge failed")
 
                         # Ok, no conflicting ref-set or alters to this ref, we can make the change
                         # Update the val with the latest in-transaction-version

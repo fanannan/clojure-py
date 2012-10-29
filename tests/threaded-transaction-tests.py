@@ -7,13 +7,13 @@ granular level.
 
 Friday, Oct. 26 2012"""
 
-import unittest
+import unittest, logging
 from threading import Thread, current_thread, Condition, local
 from time import time, sleep
 from itertools import count
 
 from clojure.lang.ref import Ref, TVal
-from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info
+from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info, loglock
 from clojure.lang.cljexceptions import IllegalStateException, TransactionRetryException
 from clojure.util.shared_lock import SharedLock
 from clojure.lang.threadutil import AtomicInteger
@@ -27,7 +27,7 @@ from clojure.lang.threadutil import AtomicInteger
 # 
 
 # Verbose output for debugging
-spew_debug = True
+spew_debug = Falseg
 
 class TestThreadedTransactions(unittest.TestCase):
     spawned_threads = []
@@ -45,8 +45,9 @@ class TestThreadedTransactions(unittest.TestCase):
         """
         Debug helper
         """
-        if spew_debug:
-            print(str)
+        with loglock:
+            if spew_debug:
+                print str
 
     def runTransactionInThread(self, func, autostart=True, postcommit=None):
         """
@@ -93,7 +94,6 @@ class TestThreadedTransactions(unittest.TestCase):
         for thread in self.spawned_threads:
             thread.join()
         self.spawned_threads = []
-
 
     def testSimpleConcurrency(self):
         def t1():
@@ -217,10 +217,11 @@ class TestThreadedTransactions(unittest.TestCase):
         # Make sure multiple transactions that occur simultaneously each commute the same ref
         # Hard to check for this behaving properly---it should have fewer retries than if each 
         # transaction did an alter, but if transactions commit at the same time one might have to retry
-        # anyway
+        # anyway. The difference is usually an order of magnitude, so this test is pretty safe
 
         self.numruns = AtomicInteger()
         self.numalterruns = AtomicInteger()
+        numthreads = 20
 
         def adder(curval):
             return curval + 1
@@ -230,21 +231,25 @@ class TestThreadedTransactions(unittest.TestCase):
             self.refA.commute(adder, None)
 
         def t2():
+            # self.d("Thread %s (%s): ALTER BEING RUN, total retry num: %s" % (current_thread().ident, id(current_thread()), self.numalterruns.getAndIncrement()))
             self.numalterruns.getAndIncrement()
             self.refB.alter(adder, None)
 
         self.refA = Ref(0, None)
         self.refB = Ref(0, None)
-        for i in range(15):
+        for i in range(numthreads):
             self.runTransactionInThread(t1)
 
         self.join_all()
-        print("Commute took %s runs" % self.numruns.get())
 
-        for i in range(15):
+        for i in range(numthreads):
             self.runTransactionInThread(t2)
 
         self.join_all()
 
-        print("Alter took %s" % self.numalterruns.get())
+        self.d("Commute took %s runs and counter is %s" % (self.numruns.get(), self.refA.deref()))
+        self.d("Alter took %s runs and counter is %s" % (self.numalterruns.get(), self.refB.deref()))
+
+        self.assertEqual(self.refA.deref(), numthreads)
+        self.assertEqual(self.refB.deref(), numthreads)
         self.assertTrue(self.numalterruns.get() > self.numruns.get())
