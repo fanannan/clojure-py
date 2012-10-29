@@ -915,8 +915,8 @@
     (let [r (ref [:a])]
         (a/assert-equal (dosync (alter r conj :b)) [:a :b])
         (a/assert-equal @r [:a :b]))
-    ; (let [r (ref [:a])]
-        ; (a/assert-equal (dosync (commute r conj :b)) [:a :b]))
+    (let [r (ref [:a])]
+        (a/assert-equal (dosync (commute r conj :b)) [:a :b]))
     (a/assert-equal (sync nil :a) :a)
     (a/assert-equal (sync nil :a :b :c) :c)
     (a/assert-equal (dosync :a :z :f) :f))

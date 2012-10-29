@@ -1,7 +1,9 @@
 """threaded-transaction-tests.py
 
 These tests exercise the LockingTransaction code
-in some multithreaded ways.
+in some multithreaded ways. More comprehensive testing
+than the tests in ref-tests.py, which test at a more
+granular level.
 
 Friday, Oct. 26 2012"""
 
@@ -210,3 +212,23 @@ class TestThreadedTransactions(unittest.TestCase):
 
         self.d("Final value of ref: %s and t1 ran %s times" % (self.refA.deref(), self.t1counter))
 
+    def testCommutes(self):
+        # Make sure multiple transactions that occur simultaneously each commute the same ref
+        # without any one retrying
+
+        self.numruns = 0
+
+        def adder(curval):
+            return curval + 1
+
+        def t1():
+            self.refA.commute(adder, None)
+            self.numruns += 1
+
+        self.refA = Ref(0, None)
+        for i in range(25):
+            self.runTransactionInThread(t1)
+
+        self.join_all()
+
+        self.assertEqual(self.refA.deref(), self.numruns)

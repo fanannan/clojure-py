@@ -1,5 +1,6 @@
 from cljexceptions import IllegalStateException, TransactionRetryException
 from clojure.lang.util import TVal
+import clojure.lang.rt as RT
 
 from itertools import count
 from threadutil import AtomicInteger
@@ -228,6 +229,38 @@ class LockingTransaction():
         self._vals[ref] = val
         return val
 
+    def doCommute(self, ref, fn, args):
+        """
+        Sets the in-transaction-value of this ref to the given value, but does not require
+        other transactions that also change this ref to retry. Commutes are re-computed at
+        commit time and apply on top of any more recent changes.
+        """
+        if not self._info or not self._info.running():
+            raise TransactionRetryException
+
+        # If we don't have an in-transaction-value yet for this ref
+        #  get the latest one
+        if not ref in self._vals:
+            try:
+                ref._lock.acquire_shared()
+                val = ref._tvals.val if ref._tvals else None
+            finally:
+                ref._lock.release_shared()
+
+            self._vals[ref] = val
+
+        # Add this commute function to the end of the list of commutes for this ref
+        fns = self._commutes.get(ref)
+        if not fns:
+            fns = []
+            self._commutes[ref] = fns
+        fns.append([fn, args])
+        # Save the value we get by applying the fn now to our in-transaction-list
+        returnValue = apply(fn, RT.cons(self._vals[ref], args))
+        self._vals[ref] = returnValue
+
+        return returnValue
+
     def doEnsure(self, ref):
         """
         Ensuring a ref means that no other transactions can change this ref until this transaction is finished.
@@ -291,8 +324,36 @@ class LockingTransaction():
                 if self._info.status.compareAndSet(TransactionState.Running, TransactionState.Committing):
                     # Handle commutes first
                     for ref in self._commutes:
-                        # TODO
-                        pass
+                        # If this ref has been ref-set or alter'ed before the commute, no need to re-apply
+                        # since we can be sure that the commute happened on the latest value of the ref
+                        if ref in self._sets:
+                            continue
+
+                        wasEnsured = ref in self._ensures
+                        self._releaseIfEnsured(ref)
+
+                        # Try to get a write lock---if some other transaction is committing to this ref right now,
+                        #  retry this transaction
+                        self._tryWriteLock(ref)
+                        locked.append(ref)
+                        if wasEnsured and ref._tvals and ref._tvals.point > self._readPoint:
+                            raise TransactionRetryException
+
+                        other_refinfo = ref._tinfo
+                        if other_refinfo and other_refinfo != self._info and other_refinfo.running():
+                            # Other transaction is currently running, and owns this ref---meaning it set the
+                            #  ref's in-transaction-value already, so we either barge them or retry
+                            if not _barge(other_refinfo):
+                                raise TransactionRetryException
+
+                        # Ok, no conflicting ref-set or alters to this ref, we can make the change
+                        # Update the val with the latest in-transaction-version
+                        val = ref._tvals.val if ref._tvals else None
+                        self._vals[ref] = val
+
+                        # Now apply each commute to the latest value
+                        for funcpair in self._commutes[ref]:
+                            self._vals[ref] = apply(funcpair[0], RT.cons(self._vals[ref], funcpair[1]))
 
                     # Acquire a write lock for all refs that were assigned to. We'll need to change all of their values
                     # If we can't, another transaction is committing so we retry
@@ -377,6 +438,7 @@ class LockingTransaction():
 
         if not done:
             raise CljException("Transaction failed after reaching retry limit :'(")
+
         return returnValue
 
     ### External API
