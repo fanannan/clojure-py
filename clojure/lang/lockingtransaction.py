@@ -15,14 +15,27 @@ LOCK_WAIT_SECS = 0.1 #(100 ms)
 # How long a transaction must be alive for before it is considered old enough to survive barging
 BARGE_WAIT_SECS = 0.1 #(10 * 1000000ns)
 
+spew_debug = True
+
 # Possible status values
 class TransactionState:
     Running, Committing, Retry, Killed, Committed = range(5)
+
+loglock = Lock()
+def log(msg):
+    """
+    Thread-safe logging, can't get logging module to spit out debug output
+    when run w/ nosetests :-/
+    """
+    with loglock:
+        print("Thread: %s (%s): %s" % (current_thread().ident, id(current_thread()), msg))
 
 class Info:
     def __init__(self, status, startPoint):
         self.status = AtomicInteger(status)
         self.startPoint = startPoint
+
+        self.lock = Lock()
 
         # Faking java's CountdownLatch w/ a simple event---it's only from 1
         self.latch = Event()
@@ -33,10 +46,11 @@ class Info:
 
 class LockingTransaction():
     transaction = thread_local()
-
     # Global ordering on all transactions---provides a mechanism for determing relativity of transactions
     #  to each other
-    transactionCounter = count()
+    # Start the count at 1 since refs history starts at 0, and a ref created before the first transaction
+    #  should be considered "before"
+    transactionCounter = count(1)
 
     def _resetData(self):
         self._info = None
@@ -70,7 +84,9 @@ class LockingTransaction():
         the countdown latch to notify other running transactions that this one has terminated
         """
         if self._info:
-            self._info.latch.set()
+            with self._info.lock:
+                self._info.status.set(status)
+                self._info.latch.set()
             self._resetData()
 
     def _tryWriteLock(self, ref):

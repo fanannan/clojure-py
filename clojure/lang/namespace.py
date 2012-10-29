@@ -58,7 +58,6 @@ def findNS(name, fromns=None):
     # else:
     #     return module
 
-
 def remove(ns):
     """Removes a namespace from sys.modules.
     """
