@@ -215,7 +215,6 @@ class LockingTransaction():
             return self._vals[ref]
 
         # Might raise a retry exception
-        log("Trying to get: %s" % ref)
         try:
             ref._lock.acquire_shared()
             if not ref._tvals:

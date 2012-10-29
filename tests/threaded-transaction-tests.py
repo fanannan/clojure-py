@@ -8,7 +8,7 @@ granular level.
 Friday, Oct. 26 2012"""
 
 import unittest, logging
-from threading import Thread, current_thread, Condition, local
+from threading import Thread, current_thread, local, Event
 from time import time, sleep
 from itertools import count
 
@@ -68,25 +68,6 @@ class TestThreadedTransactions(unittest.TestCase):
 
         return t
 
-    def wait(self, cond):
-        """
-        Locks, waits for, and releases the desired condition. If this is not the main thread, 
-        it assumes we're in a transaction, and only does so in the initial retry. Unlocks at the end.
-        """
-        if current_thread() == self.main_thread or self.first_run.data:
-            cond.acquire()
-            cond.wait()
-            cond.release()
-            self.first_run.data = False
-
-    def notify(self, cond):
-        """
-        Locks and notifies, then unlocks the desired condition variable
-        """
-        cond.acquire()
-        cond.notifyAll()
-        cond.release()
-
     def join_all(self):
         """
         Joins all spawned threads to make sure they have all finished before continuing
@@ -111,19 +92,18 @@ class TestThreadedTransactions(unittest.TestCase):
 
     def testFault(self):
         # We want to cause a fault on one ref, that means no committed value yet
-        t1wait = Condition()
-        t1launched = Condition()
+        t1wait = Event()
+        t1launched = Event()
 
         def t1():
             # This thread tries to read the value after t2 has written to it, but it starts first
             self.d("* Before wait")
-            self.wait(t1wait)
+            t1wait.wait()
             val = self.refA.deref()
             self.d("* Derefed, asserting fault")
             # Make sure we only successfully got here w/ 1 fault (deref() triggered a retry the first time around)
             self.assertEqual(self.refA._faults.get(), 1)
             self.assertEqual(self.refA.historyCount(), 1)
-            # self.assertEqual()
             self.assertEqual(val, 6)
 
             self.d("* Refsetting after fault")
@@ -131,7 +111,7 @@ class TestThreadedTransactions(unittest.TestCase):
             self.refA.refSet(7)
 
         def t2():
-            self.wait(t1launched)
+            t1launched.wait()
 
             # This thread does the committing after t1 started but before it reads the value of refA
             self.d("** Creating ref")
@@ -140,13 +120,13 @@ class TestThreadedTransactions(unittest.TestCase):
 
         def t2committed():
             self.d("** Notify")
-            sleep(.1)
-            self.notify(t1wait)
+            t1wait.set()
 
         self.runTransactionInThread(t1)
         self.runTransactionInThread(t2, postcommit=t2committed)
 
-        self.notify(t1launched)
+        self.d("Notifying t1")
+        t1launched.set()
 
         self.join_all()
 
@@ -157,8 +137,8 @@ class TestThreadedTransactions(unittest.TestCase):
     def testBarge(self):
         # Barging happens when one transaction tries to do an in-transaction-write to a ref that has
         # an in-transaction-value from another transaction
-        t1wait = Condition()
-        t2wait = Condition()
+        t1wait = Event()
+        t2wait = Event()
 
         self.t1counter = 0
         self.t2counter = 0
@@ -169,9 +149,9 @@ class TestThreadedTransactions(unittest.TestCase):
 
             # Don't commit yet, we want t2 to run and barge us
             self.d("* Notify")
-            self.notify(t2wait)
+            t2wait.set()
             self.d("* Wait")
-            self.wait(t1wait)
+            t1wait.wait()
             self.d("* Done")
 
             self.t1counter += 1
@@ -179,7 +159,7 @@ class TestThreadedTransactions(unittest.TestCase):
         def t2():
             # Wait till t1 has done its write
             self.d("** Wait")
-            self.wait(t2wait)
+            t2wait.wait()
 
             # Try to write to the ref
             # We should try and succeed to barge them: we were started first
@@ -189,7 +169,7 @@ class TestThreadedTransactions(unittest.TestCase):
 
             self.d("** After barge")
             sleep(.1)
-            self.notify(t1wait)
+            t1wait.set()
 
             self.t2counter += 1
 
