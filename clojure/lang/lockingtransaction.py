@@ -128,13 +128,14 @@ class LockingTransaction():
 
         Returns if this barge was successful or not
         """
-        # print "Trying to barge: ", time() - self._startPoint, " ", self._startPoint, " < ", other_refinfo.startPoint
+        # log("Trying to barge: %s %s < %s" % (time() - self._startPoint, self._startPoint, other_refinfo.startPoint))
         if time() - self._startPoint > BARGE_WAIT_SECS and \
             self._startPoint < other_refinfo.startPoint:
             if other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed):
                 # We barged them successfully, set their "latch" to 0 by setting it to true
-                # log("BARGED THEM: %s" % other_refinfo.thread_id)
+                # log("BARGED THEM!")
                 other_refinfo.latch.set()
+                return True
         
         return False
 
