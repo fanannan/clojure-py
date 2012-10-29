@@ -16,6 +16,7 @@ from clojure.lang.ref import Ref, TVal
 from clojure.lang.lockingtransaction import LockingTransaction, TransactionState, Info
 from clojure.lang.cljexceptions import IllegalStateException, TransactionRetryException
 from clojure.util.shared_lock import SharedLock
+from clojure.lang.threadutil import AtomicInteger
 
 ##
 # Basic idea: We want to test the corner cases when different transactions that happen concurrently on different
@@ -214,23 +215,36 @@ class TestThreadedTransactions(unittest.TestCase):
 
     def testCommutes(self):
         # Make sure multiple transactions that occur simultaneously each commute the same ref
-        # without any one retrying
+        # Hard to check for this behaving properly---it should have fewer retries than if each 
+        # transaction did an alter, but if transactions commit at the same time one might have to retry
+        # anyway
 
-        self.numruns = 0
+        self.numruns = AtomicInteger()
+        self.numalterruns = AtomicInteger()
 
         def adder(curval):
             return curval + 1
 
         def t1():
+            self.numruns.getAndIncrement()
             self.refA.commute(adder, None)
-            self.numruns += 1
+
+        def t2():
+            self.numalterruns.getAndIncrement()
+            self.refB.alter(adder, None)
 
         self.refA = Ref(0, None)
-        for i in range(25):
+        self.refB = Ref(0, None)
+        for i in range(15):
             self.runTransactionInThread(t1)
 
         self.join_all()
+        print("Commute took %s runs" % self.numruns.get())
 
-        self.assertEqual(self.refA.deref(), self.numruns)
+        for i in range(15):
+            self.runTransactionInThread(t2)
 
-    
+        self.join_all()
+
+        print("Alter took %s" % self.numalterruns.get())
+        self.assertTrue(self.numalterruns.get() > self.numruns.get())
