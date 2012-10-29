@@ -5,15 +5,15 @@ import clojure.lang.rt as RT
 from itertools import count
 from threadutil import AtomicInteger
 from threading import local as thread_local
-from threading import Lock
+from threading import Lock, Event
 from time import time
 
 # How many times to retry a transaction before giving up
 RETRY_LIMIT = 10000
 # How long to wait to acquire a read or write lock for a ref
-LOCK_WAIT_SECS = .1 #(100 ms)
+LOCK_WAIT_SECS = 0.1 #(100 ms)
 # How long a transaction must be alive for before it is considered old enough to survive barging
-BARGE_WAIT_SECS = .1 #(10 * 1000000ns)
+BARGE_WAIT_SECS = 0.1 #(10 * 1000000ns)
 
 # Possible status values
 class TransactionState:
@@ -23,12 +23,9 @@ class Info:
     def __init__(self, status, startPoint):
         self.status = AtomicInteger(status)
         self.startPoint = startPoint
-        # We need to synchronize access to status+latch in stop()
-        self.lock = Lock()
 
-        # TODO Faking a CountDownLatch(1) with a condition variable + killed var
-        # self.latch = Lock()
-        # self.latch.acquire()
+        # Faking java's CountdownLatch w/ a simple event---it's only from 1
+        self.latch = Event()
 
     def running(self):
         status = self.status.get()
@@ -73,10 +70,7 @@ class LockingTransaction():
         the countdown latch to notify other running transactions that this one has terminated
         """
         if self._info:
-            with self._info.lock:
-                self._info.status.set(status)
-                # TODO countdown latching!
-                # self._latch
+            self._info.latch.set()
             self._resetData()
 
     def _tryWriteLock(self, ref):
@@ -112,8 +106,10 @@ class LockingTransaction():
         """
         # print "Trying to barge: ", time() - self._startPoint, " ", self._startPoint, " < ", other_refinfo.startPoint
         if time() - self._startPoint > BARGE_WAIT_SECS and \
-           self._startPoint < other_refinfo.startPoint:
-           return other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed)
+            self._startPoint < other_refinfo.startPoint:
+            if other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed):
+                # We barged them successfully, set their "latch" to 0 by setting it to true
+                other_refinfo.latch.set()
         
         return False
 
@@ -124,7 +120,8 @@ class LockingTransaction():
         to reduce contention and re-conflicting with the same transaction in the future.
         """
         self._stop(TransactionState.Retry)
-        # TODO Wait for CountdownLatch for LOCK_WAIT_SECS
+        other_refinfo.latch.wait(LOCK_WAIT_SECS)
+
         raise TransactionRetryException
 
     def _takeOwnership(self, ref):

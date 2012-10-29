@@ -232,3 +232,5 @@ class TestThreadedTransactions(unittest.TestCase):
         self.join_all()
 
         self.assertEqual(self.refA.deref(), self.numruns)
+
+    
