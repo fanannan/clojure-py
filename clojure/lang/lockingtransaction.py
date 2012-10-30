@@ -425,9 +425,8 @@ class LockingTransaction():
                             ref._tvals.point = commitPoint
                             ref._tvals.msecs = self._startTime
 
-                        # TODO notify watchers of new value by adding to notify list
-                        # if ref.wat
-                        #   notify.append()
+                        if len(ref.getWatches()) > 0:
+                          notify.append([ref, oldVal, newVal])
 
                     # That's it for the commit!
                     done = True
@@ -453,16 +452,15 @@ class LockingTransaction():
                 # Send notifications to everyone who needs them, since we just committed all our changes
                 try:
                     if done:
-                        for notifier in notify:
-                            # TODO notify
-                            pass
+                        for ref, oldval, newval in notify:
+                            ref.notifyWatches(oldval, newval)
                         for action in self._actions:
-                            # TODO actions
+                            # TODO actions when agents are supported
                             pass
                 finally:
                     notify = []
+                    self._actions = []
                     # actions to agent
-                    # actions []
 
             i += 1
 

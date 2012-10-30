@@ -22,7 +22,6 @@ class Ref(ARef):
         self._maxHistory = 10
         self._minHistory = 0
         # NOTE SharedLock is also re-entrant.
-        # TODO enable logging + debug when needed
         self._lock = SharedLock(None, False)
         self._tvals = TVal(state, 0, ms_since_epoch())
 
