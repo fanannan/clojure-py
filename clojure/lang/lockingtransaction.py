@@ -7,6 +7,7 @@ from threadutil import AtomicInteger
 from threading import local as thread_local
 from threading import Lock, Event, current_thread
 from time import time
+from collections import OrderedDict
 
 # How many times to retry a transaction before giving up
 RETRY_LIMIT = 10000
@@ -50,7 +51,7 @@ class LockingTransaction():
     # Global ordering on all transactions---provides a mechanism for determing relativity of transactions
     #  to each other
     # Start the count at 1 since refs history starts at 0, and a ref created before the first transaction
-    #  should be considered "before"
+    #  should be considered "before", and 0 < 0 is false.
     transactionCounter = count(1)
 
     def _resetData(self):
@@ -58,7 +59,7 @@ class LockingTransaction():
         self._startPoint = -1 # time since epoch (time.time())
         self._vals = {}
         self._sets = []
-        self._commutes = {} # TODO sorted dict
+        self._commutes = OrderedDict()
         self._ensures = []
         self._actions = [] # Deferred agent actions
 
@@ -373,7 +374,7 @@ class LockingTransaction():
                         if other_refinfo and other_refinfo != self._info and other_refinfo.running():
                             # Other transaction is currently running, and owns this ref---meaning it set the
                             #  ref's in-transaction-value already, so we either barge them or retry
-                            if not _barge(other_refinfo):
+                            if not self._barge(other_refinfo):
                                 self._retry("RETRY - conflicting commutes being commited and barge failed")
 
                         # Ok, no conflicting ref-set or alters to this ref, we can make the change
@@ -393,9 +394,7 @@ class LockingTransaction():
 
                     # Call validators on each ref about to be changed to make sure the change is allowed
                     for ref in self._vals:
-                        # TODO
-                        # ref.validate(ref.validator, self._vals[ref])
-                        pass
+                        ref.validate(self._vals[ref])
 
                     # Now everything is ready to write: locks held, validators run, we are good to go
                     commitTime = time()

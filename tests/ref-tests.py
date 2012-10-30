@@ -61,8 +61,6 @@ class TestRef(unittest.TestCase):
         self.refOne.trimHistory()
         self.assertEqual(self.refOne.historyCount(), 1)
 
-# TODO refactor to use setupClass and teardownClass, initial attempt didn't
-#      seem to work
 @contextmanager
 def running_transaction(thetest):
     # Fake a running transaction

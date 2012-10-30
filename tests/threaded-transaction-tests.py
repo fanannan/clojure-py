@@ -27,7 +27,7 @@ from clojure.lang.threadutil import AtomicInteger
 # 
 
 # Verbose output for debugging
-spew_debug = False
+spew_debug = True
 
 class TestThreadedTransactions(unittest.TestCase):
     spawned_threads = []

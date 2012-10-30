@@ -9,8 +9,7 @@ import clojure.lang.rt as RT
 
 from itertools import count
 
-# TODO only thread-safe in cPython
-# TODO is this the best way of doing a "global static" or is there a more pythonic way?
+# NOTE only thread-safe in cPython
 refids = count()
 
 class Ref(ARef):
