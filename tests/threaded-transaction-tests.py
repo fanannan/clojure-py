@@ -203,17 +203,20 @@ class TestThreadedTransactions(unittest.TestCase):
         self.numalterruns = AtomicInteger()
         numthreads = 20
 
-        def adder(curval):
+        def incr(curval):
             return curval + 1
+
+        def adder(curval, extraval):
+            return curval + extraval
 
         def t1():
             self.numruns.getAndIncrement()
-            self.refA.commute(adder, None)
+            self.refA.commute(incr, [])
 
         def t2():
             # self.d("Thread %s (%s): ALTER BEING RUN, total retry num: %s" % (current_thread().ident, id(current_thread()), self.numalterruns.getAndIncrement()))
             self.numalterruns.getAndIncrement()
-            self.refB.alter(adder, None)
+            self.refB.alter(adder, [100])
 
         self.refA = Ref(0, None)
         self.refB = Ref(0, None)
@@ -231,5 +234,5 @@ class TestThreadedTransactions(unittest.TestCase):
         self.d("Alter took %s runs and counter is %s" % (self.numalterruns.get(), self.refB.deref()))
 
         self.assertEqual(self.refA.deref(), numthreads)
-        self.assertEqual(self.refB.deref(), numthreads)
-        self.assertTrue(self.numalterruns.get() > self.numruns.get())
+        self.assertEqual(self.refB.deref(), 2000)
+        self.assertTrue(self.numalterruns.get() >= self.numruns.get())

@@ -48,9 +48,9 @@ class TestRef(unittest.TestCase):
     def testSetNoTransaction_FAIL(self):
         self.assertRaises(IllegalStateException, self.refOne.refSet, 1)
     def testAlterNoTransaction_FAIL(self):
-        self.assertRaises(IllegalStateException, self.refOne.alter, lambda x: x**2)
+        self.assertRaises(IllegalStateException, self.refOne.alter, lambda x: x**2, [])
     def testCommuteNoTransaction_FAIL(self):
-        self.assertRaises(IllegalStateException, self.refOne.commute, lambda x: x**2)
+        self.assertRaises(IllegalStateException, self.refOne.commute, lambda x: x**2, [])
     def testTouchNoTransaction_FAIL(self):
         self.assertRaises(IllegalStateException, self.refOne.touch)
     def testBound_PASS(self):
@@ -353,7 +353,7 @@ class TestLockingTransaction(unittest.TestCase):
             self.refZero.refSet(999)
             def incr(val):
                 return val + 1
-            self.refOne.alter(incr, None)
+            self.refOne.alter(incr, [])
 
         # Test our transaction actually made the changes it should have
         LockingTransaction.runInTransaction(body)
