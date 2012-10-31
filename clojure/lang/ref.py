@@ -1,6 +1,6 @@
 from aref import ARef
 from cljexceptions import IllegalStateException
-from threadutil import AtomicInteger, ms_since_epoch
+from threadutil import AtomicInteger
 from clojure.util.shared_lock import SharedLock
 from clojure.lang.util import TVal
 from lockingtransaction import LockingTransaction
@@ -8,6 +8,7 @@ from lockingtransaction import LockingTransaction
 import clojure.lang.rt as RT
 
 from itertools import count
+from time import time
 
 # NOTE only thread-safe in cPython
 refids = count()
@@ -22,7 +23,7 @@ class Ref(ARef):
         self._minHistory = 0
         # NOTE SharedLock is also re-entrant.
         self._lock = SharedLock(None, False)
-        self._tvals = TVal(state, 0, ms_since_epoch())
+        self._tvals = TVal(state, 0, time() * 1000)
 
     def _currentVal(self):
         """

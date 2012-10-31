@@ -1,5 +1,4 @@
 from threading import Lock, local, currentThread
-from datetime import datetime
 
 from clojure.util.shared_lock import SharedLock
 
@@ -60,11 +59,3 @@ class AtomicInteger(object):
             success = False
         self._lock.release()
         return success
-
-def unix_time(dt):
-    epoch = datetime.utcfromtimestamp(0)
-    delta = dt - epoch
-    return delta.total_seconds()
-
-def ms_since_epoch():
-    return unix_time(datetime.now()) * 1000.0

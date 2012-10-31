@@ -8,7 +8,9 @@ from threadutil import AtomicInteger
 from threading import local as thread_local
 from threading import Lock, Event, current_thread
 from time import time
-from collections import OrderedDict
+# Don't use OrderedDict as it's python 2.7+
+# TODO determine the best way to keep the order of commutes in a transaction
+# from collections import OrderedDict
 
 # How many times to retry a transaction before giving up
 RETRY_LIMIT = 10000
@@ -60,7 +62,7 @@ class LockingTransaction():
         self._startPoint = -1 # time since epoch (time.time())
         self._vals = {}
         self._sets = []
-        self._commutes = OrderedDict()
+        self._commutes = {}
         self._ensures = []
         self._actions = [] # Deferred agent actions
 
