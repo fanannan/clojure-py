@@ -925,3 +925,9 @@
     (a/assert-equal
         '(2 2 2 2 2)
         (let [a 1] (take 5 (repeatedly #(+ 1 a))))))
+
+(deftest distinct-tests
+    (a/assert-true (distinct? 1 2 3 [1 2] [1 2 3]))
+    (a/assert-true (distinct? #{1} {1 1}))
+    (a/assert-false (distinct? 1 1))
+    (a/assert-false (distinct? #{1} #{1})))
