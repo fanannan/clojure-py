@@ -1,6 +1,7 @@
 from cljexceptions import IllegalStateException, TransactionRetryException
 from clojure.lang.util import TVal
 import clojure.lang.rt as RT
+from clojure.util.shared_lock import shared_lock, unique_lock
 
 from itertools import count
 from threadutil import AtomicInteger
@@ -44,7 +45,7 @@ class Info:
 
     def running(self):
         status = self.status.get()
-        return status == TransactionState.Running or status == TransactionState.Committing
+        return status in (TransactionState.Running, TransactionState.Committing)
 
 class LockingTransaction():
     transaction = thread_local()
@@ -130,8 +131,8 @@ class LockingTransaction():
         Returns if this barge was successful or not
         """
         # log("Trying to barge: %s %s < %s" % (time() - self._startPoint, self._startPoint, other_refinfo.startPoint))
-        if time() - self._startPoint > BARGE_WAIT_SECS and \
-            self._startPoint < other_refinfo.startPoint:
+        if(time() - self._startPoint > BARGE_WAIT_SECS and
+            self._startPoint < other_refinfo.startPoint):
             if other_refinfo.status.compareAndSet(TransactionState.Running, TransactionState.Killed):
                 # We barged them successfully, set their "latch" to 0 by setting it to true
                 # log("BARGED THEM!")
@@ -216,8 +217,7 @@ class LockingTransaction():
             return self._vals[ref]
 
         # Might raise a retry exception
-        try:
-            ref._lock.acquire_shared()
+        with unique_lock(ref._lock):
             if not ref._tvals:
                 raise IllegalStateException("Ref in transaction doRef is unbound! ", ref)
 
@@ -231,8 +231,6 @@ class LockingTransaction():
                 historypoint = historypoint.prev
                 if historypoint == ref._tvals:
                     break
-        finally:
-            ref._lock.release_shared()
 
         # Could not find an old-enough committed value, fault!
         ref._faults.getAndIncrement()
@@ -268,22 +266,15 @@ class LockingTransaction():
         # If we don't have an in-transaction-value yet for this ref
         #  get the latest one
         if not ref in self._vals:
-            try:
-                ref._lock.acquire_shared()
+            with shared_lock(ref._lock):
                 val = ref._tvals.val if ref._tvals else None
-            finally:
-                ref._lock.release_shared()
 
             self._vals[ref] = val
 
         # Add this commute function to the end of the list of commutes for this ref
-        fns = self._commutes.get(ref)
-        if not fns:
-            fns = []
-            self._commutes[ref] = fns
-        fns.append([fn, args])
+        self._commutes.setdefault(ref, []).append([fn, args])
         # Save the value we get by applying the fn now to our in-transaction-list
-        returnValue = apply(fn, RT.cons(self._vals[ref], args))
+        returnValue = fn(*RT.cons(self._vals[ref], args))
         self._vals[ref] = returnValue
 
         return returnValue
@@ -331,16 +322,16 @@ class LockingTransaction():
         notify = []
 
         while i < RETRY_LIMIT and not done:
+            # Update the read point of this transaction try so we see a new snapshot of the world
+            self._updateReadPoint()
+
+            if i == 0:
+                # First run, do some extra setup:
+                #  set our start point (of the overall transaction) to now
+                self._startPoint = self._readPoint
+                self._startTime = time()
+
             try:
-                # Update the read point of this transaction try so we see a new snapshot of the world
-                self._updateReadPoint()
-
-                if i == 0:
-                    # First run, do some extra setup:
-                    #  set our start point (of the overall transaction) to now
-                    self._startPoint = self._readPoint
-                    self._startTime = time()
-
                 # Set the info for this transaction try. We are now Running!
                 # if self._info:
                     # log("Setting new INFO, but old: %s %s is running? %s" % (self._info, self._info.thread_id, self._info.running()))
@@ -349,7 +340,7 @@ class LockingTransaction():
                 # log("new INFO: %s %s running? %s" % (self._info, self._info.thread_id, self._info.running()))
 
                 # Run our user code in the transaction!
-                returnValue = apply(fn)
+                returnValue = fn()
 
                 # Make sure we're still alive, and if so transition to the commit stage
                 if self._info.status.compareAndSet(TransactionState.Running, TransactionState.Committing):

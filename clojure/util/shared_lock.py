@@ -7,6 +7,9 @@
 # Written by Dmitry Dvoinikov <dmitry@targeted.org>
 # Distributed under MIT license.
 #
+# 2012:
+# Edited by Leo Franchi (lfranchi@kde.org) to remove the exc_string dep
+#
 # The latest source code (complete with self-tests) is available from:
 # http://www.targeted.org/python/recipes/shared_lock.py
 #
@@ -83,13 +86,30 @@ __all__ = [ "SharedLock" ]
 
 from threading import Lock, currentThread, Event
 from random import randint
-from exc_string import trace_string
+from contextlib import contextmanager
+# from exc_string import trace_string
 
 if not hasattr(__builtins__, "sorted"):
     def sorted(seq):
         result = [ x for x in seq ]
         result.sort()
         return result
+
+@contextmanager
+def shared_lock(sharedlock):
+    sharedlock.acquire_shared()
+    try:
+        yield {}
+    finally:
+        sharedlock.release_shared()
+
+@contextmanager
+def unique_lock(sharedlock):
+    sharedlock.acquire()
+    try:
+        yield {}
+    finally:
+        sharedlock.release()
 
 ################################################################################
 
@@ -113,7 +133,7 @@ class SharedLock(object):
         thrCurrent = currentThread()
         self.__log("%s @ %.08x %s %s @ %.08x in %s" 
                   % (thrCurrent.getName(), id(thrCurrent), s, 
-                     self._debug_dump(), id(self), trace_string()))
+                     self._debug_dump(), id(self), ""))
 
     ################################### debugging lock state dump
 
@@ -275,7 +295,7 @@ class SharedLock(object):
                             break
                     else:
                         assert False, "Invalid thread for %s in %s" % \
-                                      (self._debug_dump(), trace_string())
+                                      (self._debug_dump(), "")
 
                 # if a thread has failed to acquire a lock, it's identical as if it had
                 # it and then released, therefore other threads should be released now
@@ -288,7 +308,7 @@ class SharedLock(object):
 
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
 
             if result:
                 if self.__log: self._log("acquired")
@@ -328,7 +348,7 @@ class SharedLock(object):
             if self.__log: self._log("acquiring exclusive")
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
 
             # this thread already has exclusive lock, the count is incremented
 
@@ -337,7 +357,7 @@ class SharedLock(object):
                 self.intOwnerDepth += 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("acquired exclusive")
                 return True
 
@@ -354,7 +374,7 @@ class SharedLock(object):
                     self.intOwnerDepth = 1
                     if self.__debug:
                         assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                                  (self._debug_dump(), trace_string())
+                                                  (self._debug_dump(), "")
                     if self.__log: self._log("acquired exclusive")
                     return True
 
@@ -377,7 +397,7 @@ class SharedLock(object):
                 self.intOwnerDepth = 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("acquired exclusive")
                 return True
 
@@ -391,7 +411,7 @@ class SharedLock(object):
 
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
             if self.__log: self._log("waiting for exclusive")
 
         finally:
@@ -417,7 +437,7 @@ class SharedLock(object):
             if self.__log: self._log("acquiring shared")
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
 
             # this thread already has shared lock, the count is incremented
 
@@ -425,7 +445,7 @@ class SharedLock(object):
                 self.dicUsers[thrCurrent] += 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("acquired shared")
                 return True
 
@@ -438,7 +458,7 @@ class SharedLock(object):
                     self.dicUsers[thrCurrent] = 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("acquired shared")
                 return True
 
@@ -449,7 +469,7 @@ class SharedLock(object):
                 self.dicUsers[thrCurrent] = 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("acquired shared")
                 return True
 
@@ -462,7 +482,7 @@ class SharedLock(object):
 
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
             if self.__log: self._log("waiting for shared")
 
         finally:
@@ -524,7 +544,7 @@ class SharedLock(object):
             if self.__log: self._log("releasing exclusive")
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
 
             if thrCurrent is not self.thrOwner:
                 raise Exception("Current thread has not acquired the lock")
@@ -535,7 +555,7 @@ class SharedLock(object):
             if self.intOwnerDepth > 0:
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("released exclusive")
                 return
 
@@ -547,7 +567,7 @@ class SharedLock(object):
             
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
             if self.__log: self._log("released exclusive")
 
         finally:
@@ -569,7 +589,7 @@ class SharedLock(object):
             if self.__log: self._log("releasing shared")
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
 
             if thrCurrent not in self.dicUsers:
                 raise Exception("Current thread has not acquired the lock")
@@ -580,7 +600,7 @@ class SharedLock(object):
             if self.dicUsers[thrCurrent] > 0:
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                              (self._debug_dump(), trace_string())
+                                              (self._debug_dump(), "")
                 if self.__log: self._log("released shared")
                 return
             else:
@@ -592,7 +612,7 @@ class SharedLock(object):
             
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
-                                          (self._debug_dump(), trace_string())
+                                          (self._debug_dump(), "")
             if self.__log: self._log("released shared")
 
         finally:

@@ -28,9 +28,6 @@ import clojure.util.byteplay as byteplay
 import marshal
 import types
 
-## TODO Is this the rigth way to check if something's a classs?
-from inspect import isclass
-
 _MACRO_ = Keyword("macro")
 _NS_ = Symbol("*ns*")
 version = (sys.version_info[0] * 10) + sys.version_info[1]
