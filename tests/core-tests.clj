@@ -907,7 +907,9 @@
 (deftest empty-tests
     (a/assert-true (empty? '()))
     (a/assert-true (empty? {}))
-    (a/assert-true (empty? #{})))
+    (a/assert-true (empty? #{}))
+    (a/assert-false (empty? [1]))
+    (a/assert-false (empty? '(1 2 3 4))))
 
 (deftest while-tests
     (let [a (atom 10)]
@@ -918,8 +920,8 @@
 
 (deftest repeatedly-tests
     (a/assert-equal
-        (repeatedly 5 #(range 2))
-        (take 5 (cycle '((0 1)))))
+        '((0 1) (0 1) (0 1) (0 1) (0 1))
+        (repeatedly 5 #(range 2)))
     (a/assert-equal
-        (take 5 (cycle '(2)))
+        '(2 2 2 2 2)
         (let [a 1] (take 5 (repeatedly #(+ 1 a))))))
