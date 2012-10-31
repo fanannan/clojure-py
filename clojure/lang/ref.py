@@ -52,17 +52,17 @@ class Ref(ARef):
         Returns the newly set state"""
         return LockingTransaction.ensureGet().doSet(self, state)
 
-    def alter(self, fn, *args):
+    def alter(self, fn, args):
         """
         Alters the value of this ref, and returns the new state"""
         transaction = LockingTransaction.ensureGet()
-        return transaction.doSet(self, apply(fn, RT.cons(transaction.getRef(self), *args)))
+        return transaction.doSet(self, fn(*RT.cons(transaction.getRef(self), args)))
 
-    def commute(self, fn, *args):
+    def commute(self, fn, args):
         """
         Commutes the value of this ref, allowing for it to be updated by other transactions before the
         commuting function is called"""
-        return LockingTransaction.ensureGet().doCommute(self, fn, *args)
+        return LockingTransaction.ensureGet().doCommute(self, fn, args)
 
     def touch(self):
         """
