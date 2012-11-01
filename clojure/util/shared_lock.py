@@ -22,11 +22,11 @@
 # 1. Supports timeouts. Attempts to acquire a lock occassionally time out in
 #    a specified amount of time.
 # 2. Fully reentrant - single thread can have any number of both shared and
-#    exclusive ownerships on the same lock instance (restricted with the lock 
+#    exclusive ownerships on the same lock instance (restricted with the lock
 #    semantics of course).
 # 3. Supports FIFO order for threads waiting to acquire the lock exclusively.
 # 4. Robust and manageable. Can be created in debug mode so that each lock
-#    operation causes the internal invariant to be checked (although this 
+#    operation causes the internal invariant to be checked (although this
 #    certainly slows it down). Can be created with logging so that each lock
 #    operation is verbosely logged.
 # 5. Prevents either side from starvation by picking the winning thread at
@@ -34,7 +34,7 @@
 # 6. Recycles temporary one-time synchronization objects.
 # 7. Can be used as a drop-in replacement for threading.Lock, ex.
 #    >> from shared_lock import SharedLock as Lock
-#    because the semantics and exclusive locking interface are identical to 
+#    because the semantics and exclusive locking interface are identical to
 #    that of threading.Lock.
 #
 # Synopsis:
@@ -49,8 +49,8 @@
 #         Returns None.
 #     def acquire_shared(timeout_sec = None):
 #         Attempts to acquire the lock in shared mode within the optional
-#         timeout. If the timeout is not specified, waits for the lock 
-#         infinitely. Returns True if the lock has been acquired, False 
+#         timeout. If the timeout is not specified, waits for the lock
+#         infinitely. Returns True if the lock has been acquired, False
 #         otherwise.
 #     def release_shared():
 #         Releases the lock previously locked by a call to acquire_shared().
@@ -60,22 +60,22 @@
 #
 # (c) 2005 Dmitry Dvoinikov <dmitry@targeted.org>
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy 
-# of this software and associated documentation files (the "Software"), to deal 
-# in the Software without restriction, including without limitation the rights to 
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-# of the Software, and to permit persons to whom the Software is furnished to do 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+# of the Software, and to permit persons to whom the Software is furnished to do
 # so, subject to the following conditions:
 #
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
 ################################################################################
@@ -131,16 +131,16 @@ class SharedLock(object):
 
     def _log(self, s):
         thrCurrent = currentThread()
-        self.__log("%s @ %.08x %s %s @ %.08x in %s" 
-                  % (thrCurrent.getName(), id(thrCurrent), s, 
+        self.__log("%s @ %.08x %s %s @ %.08x in %s"
+                  % (thrCurrent.getName(), id(thrCurrent), s,
                      self._debug_dump(), id(self), ""))
 
     ################################### debugging lock state dump
 
     def _debug_dump(self):
         return "SharedLock(Ex:[%s] (%s), Sh:[%s] (%s))" \
-               % (self.thrOwner is not None 
-                  and "%s:%d" % (self.thrOwner.getName(), 
+               % (self.thrOwner is not None
+                  and "%s:%d" % (self.thrOwner.getName(),
                                  self.intOwnerDepth)
                   or "",
                   ", ".join([ "%s:%d" % (th.getName(), dp)
@@ -168,7 +168,7 @@ class SharedLock(object):
 
     def _has_pending_owners(self):
         return len(self.lstOwners) > 0
-    
+
     def _has_users(self):
         return len(self.dicUsers) > 0
 
@@ -217,14 +217,14 @@ class SharedLock(object):
 
         # a thread may be pending on a lock only once, either as user or as owner
 
-        lstPendingThreads = sorted(map(lambda t: t[0], self.lstUsers) + 
+        lstPendingThreads = sorted(map(lambda t: t[0], self.lstUsers) +
                                    map(lambda t: t[0], self.lstOwners))
 
         for i in range(len(lstPendingThreads) - 1):
             if lstPendingThreads[i] is lstPendingThreads[i+1]:
                 return False
 
-        return True 
+        return True
 
     ################################### instance lock
 
@@ -276,7 +276,7 @@ class SharedLock(object):
             boolReAcquireShared = False
 
             if not result: # the thread has failed to acquire the lock
-                
+
                 for i, (thrUser, evtEvent, intSharedDepth) in enumerate(self.lstUsers):
                     if thrUser is thrCurrent and evtEvent is _evtEvent:
                         assert intSharedDepth == 1
@@ -326,10 +326,10 @@ class SharedLock(object):
 
         return result
 
-    def _release_events(self, _lstEvents): # releases waiting thread(s) 
+    def _release_events(self, _lstEvents): # releases waiting thread(s)
 
         for evtEvent in _lstEvents:
-            evtEvent.set() 
+            evtEvent.set()
 
     ################################### exclusive acquire
 
@@ -364,12 +364,12 @@ class SharedLock(object):
             # this thread already has shared lock, this is the most complicated case
 
             elif thrCurrent in self.dicUsers:
-                
+
                 # the thread gets exclusive lock immediately if there is no other threads
 
                 if self.dicUsers.keys() == [thrCurrent] \
                 and not self._has_pending_users() and not self._has_pending_owners():
-                    
+
                     self.thrOwner = thrCurrent
                     self.intOwnerDepth = 1
                     if self.__debug:
@@ -404,7 +404,7 @@ class SharedLock(object):
             # otherwise the thread registers itself as a pending owner with no
             # prior record of holding shared lock
 
-            else: 
+            else:
 
                 evtEvent = self._pick_event()
                 self.lstOwners.append((thrCurrent, evtEvent, 0))
@@ -423,7 +423,7 @@ class SharedLock(object):
 
     def acquire_shared(self, timeout = None):
         """
-        Attempts to acquire the lock in shared mode within the optional 
+        Attempts to acquire the lock in shared mode within the optional
         timeout. If the timeout is not specified, waits for the lock
         infinitely. Returns True if the lock has been acquired, False
         otherwise.
@@ -441,7 +441,7 @@ class SharedLock(object):
 
             # this thread already has shared lock, the count is incremented
 
-            if thrCurrent in self.dicUsers: 
+            if thrCurrent in self.dicUsers:
                 self.dicUsers[thrCurrent] += 1
                 if self.__debug:
                     assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
@@ -451,7 +451,7 @@ class SharedLock(object):
 
             # this thread already has exclusive lock, now it also has shared
 
-            elif thrCurrent is self.thrOwner: 
+            elif thrCurrent is self.thrOwner:
                 if thrCurrent in self.dicUsers:
                     self.dicUsers[thrCurrent] += 1
                 else:
@@ -490,7 +490,7 @@ class SharedLock(object):
 
         return self._acquire_event(evtEvent, timeout) # the thread waits for a lock release
 
-    ################################### 
+    ###################################
 
     def _release_threads(self):
 
@@ -564,7 +564,7 @@ class SharedLock(object):
             # a decision is made which pending thread(s) to awake (if any)
 
             self._release_threads()
-            
+
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
                                           (self._debug_dump(), "")
@@ -593,7 +593,7 @@ class SharedLock(object):
 
             if thrCurrent not in self.dicUsers:
                 raise Exception("Current thread has not acquired the lock")
-                
+
             # the thread releases its shared lock
 
             self.dicUsers[thrCurrent] -= 1
@@ -609,7 +609,7 @@ class SharedLock(object):
             # a decision is made which pending thread(s) to awake (if any)
 
             self._release_threads()
-            
+
             if self.__debug:
                 assert self._invariant(), "SharedLock invariant failed: %s in %s" % \
                                           (self._debug_dump(), "")
@@ -621,7 +621,7 @@ class SharedLock(object):
 ################################################################################
 
 if __name__ == "__main__":
-    
+
     print "self-testing module shared_lock.py:"
 
     from threading import Thread
@@ -919,9 +919,9 @@ if __name__ == "__main__":
 
     def g(evt):
         evt.wait()
-        
+
         sleep(1.0)
-        
+
         assert lck.debug_dump() == "SharedLock(Ex:[] (), Sh:[f:1] ())"
         lck.acquire_shared()
         assert lck.debug_dump() == "SharedLock(Ex:[] (), Sh:[f:1, g:1] ())"
@@ -937,9 +937,9 @@ if __name__ == "__main__":
 
     def h(evt):
         evt.wait()
-        
+
         sleep(2.0)
-        
+
         assert lck.debug_dump() == "SharedLock(Ex:[] (), Sh:[f:1, g:1] ())"
         lck.acquire()
         assert lck.debug_dump() == "SharedLock(Ex:[h:1] (g:1), Sh:[] ())"
@@ -1064,7 +1064,7 @@ if __name__ == "__main__":
     lck, shlck = SharedLock(None, True), Lock()
 
     ex, sh, start, t = 0, 0, time(), 10.0
-    
+
     def exclusive(evt):
         global ex, start, t
         evt.wait()
@@ -1129,16 +1129,16 @@ if __name__ == "__main__":
 
     lck = SharedLock(None, True)
     start, t = time(), 30.0
-    
+
     def f(evt):
         global start, t
         evt.wait()
         while start + t > time():
-    
+
             sleep(random() * 0.1)
 
             j = randint(0, 1)
-            if j == 0: 
+            if j == 0:
                 jack = lck.acquire(*(randint(0, 1) == 0 and (random(), ) or ()))
             else:
                 jack = lck.acquire_shared(*(randint(0, 1) == 0 and (random(), ) or ()))
@@ -1146,15 +1146,15 @@ if __name__ == "__main__":
             sleep(random() * 0.1)
 
             k = randint(0, 1)
-            if k == 0: 
+            if k == 0:
                 kack = lck.acquire(*(randint(0, 1) == 0 and (random(), ) or ()))
             else:
                 kack = lck.acquire_shared(*(randint(0, 1) == 0 and (random(), ) or ()))
-            
+
             sleep(random() * 0.1)
 
             l = randint(0, 1)
-            if l == 0: 
+            if l == 0:
                 lack = lck.acquire(*(randint(0, 1) == 0 and (random(), ) or ()))
             else:
                 lack = lck.acquire_shared(*(randint(0, 1) == 0 and (random(), ) or ()))
@@ -1162,7 +1162,7 @@ if __name__ == "__main__":
             sleep(random() * 0.1)
 
             if lack:
-                if l == 0: 
+                if l == 0:
                     lck.release()
                 else:
                     lck.release_shared()
@@ -1170,7 +1170,7 @@ if __name__ == "__main__":
             sleep(random() * 0.1)
 
             if kack:
-                if k == 0: 
+                if k == 0:
                     lck.release()
                 else:
                     lck.release_shared()
@@ -1178,7 +1178,7 @@ if __name__ == "__main__":
             sleep(random() * 0.1)
 
             if jack:
-                if j == 0: 
+                if j == 0:
                     lck.release()
                 else:
                     lck.release_shared()
@@ -1207,9 +1207,9 @@ if __name__ == "__main__":
     evtlock, stop = Event(), Event()
 
     def user(evt):
-        
+
         evt.wait()
-        
+
         try:
 
             while not stop.isSet():
@@ -1218,14 +1218,14 @@ if __name__ == "__main__":
                 try:
 
                     evtlock.set()
-                    
+
                     shlck.acquire()
                     try:
                         global hold
                         hold += 1
                     finally:
                         shlck.release()
-                  
+
                     sleep(random() * 0.4)
 
                     waited = time()

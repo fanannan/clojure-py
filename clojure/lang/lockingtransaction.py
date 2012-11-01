@@ -58,13 +58,13 @@ class LockingTransaction():
     transactionCounter = count(1)
 
     def _resetData(self):
-        self._info = None
+        self._info       = None
         self._startPoint = -1 # time since epoch (time.time())
-        self._vals = {}
-        self._sets = []
-        self._commutes = {}
-        self._ensures = []
-        self._actions = [] # Deferred agent actions
+        self._vals       = {}
+        self._sets       = []
+        self._commutes   = {}
+        self._ensures    = []
+        self._actions    = [] # Deferred agent actions
 
     def __init__(self):
         self._readPoint = -1 # global ordering on transactions (int)
@@ -77,20 +77,24 @@ class LockingTransaction():
         log(debug_msg)
         raise TransactionRetryException
 
-    def _updateReadPoint(self):
+    def _updateReadPoint(self, set_start_point):
         """
         Update the read point of this transaction to the next transaction counter id"""
         self._readPoint = self.transactionCounter.next()
+        if set_start_point:
+            self._startPoint = self._readPoint
+            self._startTime = time()
+
 
     @classmethod
     def _getCommitPoint(cls):
         """
-        Gets the next transaction counter id, but simply returns it for use instead of 
+        Gets the next transaction counter id, but simply returns it for use instead of
         updating any internal fields.
         """
         return cls.transactionCounter.next()
 
-    def _stop(self, status):
+    def _stop_transaction(self, status):
         """
         Stops this transaction, setting the final state to the desired state. Will decrement
         the countdown latch to notify other running transactions that this one has terminated
@@ -140,7 +144,7 @@ class LockingTransaction():
                 # log("BARGED THEM!")
                 other_refinfo.latch.set()
                 return True
-        
+
         return False
 
     def _blockAndBail(self, other_refinfo):
@@ -149,7 +153,7 @@ class LockingTransaction():
         with other_refinfo's transaction, we give it LOCK_WAIT_SECS to complete before retrying ourselves,
         to reduce contention and re-conflicting with the same transaction in the future.
         """
-        self._stop(TransactionState.Retry)
+        self._stop_transaction(TransactionState.Retry)
         other_refinfo.latch.wait(LOCK_WAIT_SECS)
 
         self._retry("RETRY - Blocked and now bailing")
@@ -191,7 +195,7 @@ class LockingTransaction():
                     # We lost the barge attempt, so we retry
                     ref._lock.release()
                     unlocked = True
-                    # log("BARGE FAILED other: %s (%s != %s ? %s (running? %s))" % 
+                    # log("BARGE FAILED other: %s (%s != %s ? %s (running? %s))" %
                             # (refinfo.thread_id, refinfo, self._info, refinfo != self._info, refinfo.running()))
                     return self._blockAndBail(refinfo)
             # We own this ref
@@ -314,152 +318,154 @@ class LockingTransaction():
             self._ensures.append(ref)
 
     def run(self, fn):
-        """
-        Main STM entry point---run the desired 0-args function in a transaction, capturing all modifications
-        that happen, atomically applying them during the commit step.
-        """
-        done = False
-        i = 0
-        locked = []
-        notify = []
+        """Main STM entry point---run the desired 0-args function in a
+        transaction, capturing all modifications that happen,
+        atomically applying them during the commit step."""
 
-        while i < RETRY_LIMIT and not done:
-            # Update the read point of this transaction try so we see a new snapshot of the world
-            self._updateReadPoint()
+        tx_committed = False
 
-            if i == 0:
-                # First run, do some extra setup:
-                #  set our start point (of the overall transaction) to now
-                self._startPoint = self._readPoint
-                self._startTime = time()
+        for i in xrange(RETRY_LIMIT):
+            if tx_committed: break
 
+            self._updateReadPoint(i == 0)
+
+            locks, notifications = [], []
             try:
-                # Set the info for this transaction try. We are now Running!
-                # if self._info:
-                    # log("Setting new INFO, but old: %s %s is running? %s" % (self._info, self._info.thread_id, self._info.running()))
-                self._info = Info(TransactionState.Running, self._startPoint)
-                self._info.thread_id = "%s (%s)" % (current_thread().ident, id(current_thread()))
-                # log("new INFO: %s %s running? %s" % (self._info, self._info.thread_id, self._info.running()))
-
-                # Run our user code in the transaction!
+                self._start_transaction()
                 returnValue = fn()
+                if self.attempt_commit(locks, notifications):
+                    tx_committed = True
 
-                # Make sure we're still alive, and if so transition to the commit stage
-                if self._info.status.compareAndSet(TransactionState.Running, TransactionState.Committing):
-                    # Handle commutes first
-                    for ref in self._commutes:
-                        # If this ref has been ref-set or alter'ed before the commute, no need to re-apply
-                        # since we can be sure that the commute happened on the latest value of the ref
-                        if ref in self._sets:
-                            continue
-
-                        wasEnsured = ref in self._ensures
-                        self._releaseIfEnsured(ref)
-
-                        # Try to get a write lock---if some other transaction is committing to this ref right now,
-                        #  retry this transaction
-                        self._tryWriteLock(ref)
-                        locked.append(ref)
-                        if wasEnsured and ref._tvals and ref._tvals.point > self._readPoint:
-                            self._retry("RETRY - was ensured and has newer version while commiting")
-
-                        other_refinfo = ref._tinfo
-                        if other_refinfo and other_refinfo != self._info and other_refinfo.running():
-                            # Other transaction is currently running, and owns this ref---meaning it set the
-                            #  ref's in-transaction-value already, so we either barge them or retry
-                            if not self._barge(other_refinfo):
-                                self._retry("RETRY - conflicting commutes being commited and barge failed")
-
-                        # Ok, no conflicting ref-set or alters to this ref, we can make the change
-                        # Update the val with the latest in-transaction-version
-                        val = ref._tvals.val if ref._tvals else None
-                        self._vals[ref] = val
-
-                        # Now apply each commute to the latest value
-                        for funcpair in self._commutes[ref]:
-                            self._vals[ref] = apply(funcpair[0], RT.cons(self._vals[ref], funcpair[1]))
-
-                    # Acquire a write lock for all refs that were assigned to. We'll need to change all of their values
-                    # If we can't, another transaction is committing so we retry
-                    for ref in self._sets:
-                        self._tryWriteLock(ref)
-                        locked.append(ref)
-
-                    # Call validators on each ref about to be changed to make sure the change is allowed
-                    for ref in self._vals:
-                        ref.validate(self._vals[ref])
-
-                    # Now everything is ready to write: locks held, validators run, we are good to go
-                    commitTime = time()
-                    commitPoint = self._getCommitPoint()
-
-                    # Apply changes to each ref
-                    for ref in self._vals:
-                        oldValue = ref._tvals.val if ref._tvals else None
-                        newVal = self._vals[ref]
-
-                        historyLength = ref.historyCount()
-
-                        # Easy case: ref has no binding, so lets give it one
-                        if not ref._tvals:
-                            ref._tvals = TVal(newVal, commitPoint, self._startTime)
-                        # Add this new value to the tvals history chain. This happens if:
-                        #  1. historyCount is less than minHistory
-                        #  2. the ref's faults > 0 and the history chain is < maxHistory
-                        elif ref._faults.get() > 0 and historyLength < ref.maxHistory() or \
-                               historyLength < ref.minHistory():
-                            ref._tvals = TVal(newVal, commitPoint, self._startTime, ref._tvals)
-                            ref._faults.set(0)
-                        # Otherwise, we recycle the oldest ref in the chain, and make it the newest
-                        else:
-                            ref._tvals = ref._tvals.next
-                            ref._tvals.val = newVal
-                            ref._tvals.point = commitPoint
-                            ref._tvals.msecs = self._startTime
-
-                        if len(ref.getWatches()) > 0:
-                          notify.append([ref, oldVal, newVal])
-
-                    # That's it for the commit!
-                    done = True
-                    self._info.status.set(TransactionState.Committed)
             except TransactionRetryException:
-                # Just keep on looping
-                pass
+                pass # Retry after cleanup.
             finally:
-                # Clean up after ourselves, release every read lock we acquired before, last first
-                locked.reverse()
-                for ref in locked:
-                    ref._lock.release()
-                locked = []
+                self.release_locks(locks)
+                self.release_ensures()
+                self._stop_transaction(TransactionState.Committed if tx_committed else TransactionState.Retry)
+                self.send_notifications(tx_committed, notifications)
 
-                # Release any ensure'd read-locked refs
-                for ref in self._ensures:
-                    ref._lock.release_shared()
-                self._ensures = []
-
-                # Set our state to either stopped or retry, depending on if we successfully committed
-                self._stop(TransactionState.Committed if done else TransactionState.Retry)
-
-                # Send notifications to everyone who needs them, since we just committed all our changes
-                try:
-                    if done:
-                        for ref, oldval, newval in notify:
-                            ref.notifyWatches(oldval, newval)
-                        for action in self._actions:
-                            # TODO actions when agents are supported
-                            pass
-                finally:
-                    notify = []
-                    self._actions = []
-                    # actions to agent
-
-            i += 1
-
-        if not done:
+        if tx_committed:
+            return returnValue
+        else:
             raise CljException("Transaction failed after reaching retry limit :'(")
 
-        return returnValue
+    def _start_transaction(self):
+        # Set the info for this transaction try. We are now Running!
+        # if self._info:
+        #     log("Setting new INFO, but old: %s %s is running? %s" % (self._info, self._info.thread_id, self._info.running()))
+        self._info = Info(TransactionState.Running, self._startPoint)
+        self._info.thread_id = "%s (%s)" % (current_thread().ident, id(current_thread()))
+        # log("new INFO: %s %s running? %s" % (self._info, self._info.thread_id, self._info.running()))
+
+    def attempt_commit(self, locks, notifications):
+        # This will either raise an exception or return True
+        if self._info.status.compareAndSet(TransactionState.Running, TransactionState.Committing):
+            self.handle_commutes(locks)
+            self.acquire_write_locks(self._sets, locks)
+            self.validate_changes(self._vals)
+            notifications = self.commit_ref_sets()
+            self._info.status.set(TransactionState.Committed)
+            return True
+        return False
+
+    def handle_commutes(self, locks):
+        for ref, funcpairs in self._commutes.items():
+            # If this ref has been ref-set or alter'ed before the commute, no need to re-apply
+            # since we can be sure that the commute happened on the latest value of the ref
+            if ref in self._sets: continue
+
+            wasEnsured = ref in self._ensures
+            self._releaseIfEnsured(ref)
+
+            # Try to get a write lock---if some other transaction is
+            # committing to this ref right now, retry this transaction
+            self._tryWriteLock(ref)
+            locks.append(ref)
+            if wasEnsured and ref._tvals and ref._tvals.point > self._readPoint:
+                self._retry("RETRY - was ensured and has newer version while commiting")
+
+            other_refinfo = ref._tinfo
+            if other_refinfo and other_refinfo != self._info and other_refinfo.running():
+                # Other transaction is currently running, and owns
+                # this ref---meaning it set the ref's
+                # in-transaction-value already, so we either barge
+                # them or retry
+                if not self._barge(other_refinfo):
+                    self._retry("RETRY - conflicting commutes being commited and barge failed")
+
+            # Ok, no conflicting ref-set or alters to this ref, we can
+            # make the change Update the val with the latest
+            # in-transaction-version
+            val = ref._tvals.val if ref._tvals else None
+            self._vals[ref] = val
+
+            # Now apply each commute to the latest value
+            for fn, args in funcpairs:
+                self._vals[ref] = fn(*RT.cons(self._vals[ref], args))
+
+    def acquire_write_locks(self, sets, locks):
+        # Acquire a write lock for all refs that were assigned to.
+        # We'll need to change all of their values If we can't,
+        # another transaction is committing so we retry
+        for ref in sets:
+            self._tryWriteLock(ref)
+            locks.append(ref)
+
+    def validate_changes(self, vals):
+        # Call validators on each ref about to be changed to make sure the change is allowed
+        for ref, value in vals.items():
+            ref.validate(value)
+
+    def commit_ref_sets(self):
+        notifications = []
+        commitPoint = self._getCommitPoint()
+        for ref in self._vals:
+            oldValue      = ref._tvals.val if ref._tvals else None
+            newVal        = self._vals[ref]
+            historyLength = ref.historyCount()
+
+            # Easy case: ref has no binding, so lets give it one
+            if not ref._tvals:
+                ref._tvals = TVal(newVal, commitPoint, self._startTime)
+
+            # Add this new value to the tvals history chain. This happens if:
+            #  1. historyCount is less than minHistory
+            #  2. the ref's faults > 0 and the history chain is < maxHistory
+            elif ref._faults.get() > 0 and historyLength < ref.maxHistory() or \
+                   historyLength < ref.minHistory():
+                ref._tvals = TVal(newVal, commitPoint, self._startTime, ref._tvals)
+                ref._faults.set(0)
+            # Otherwise, we recycle the oldest ref in the chain, and make it the newest
+            else:
+                ref._tvals       = ref._tvals.next
+                ref._tvals.val   = newVal
+                ref._tvals.point = commitPoint
+                ref._tvals.msecs = self._startTime
+
+            if len(ref.getWatches()) > 0:
+              notifications.append([ref, oldValue, newVal])
+
+        return notifications
+
+    def release_locks(self, locks):
+        locks.reverse()
+        for ref in locks:
+            ref._lock.release()
+
+    def release_ensures(self):
+        for ref in self._ensures:
+            ref._lock.release_shared()
+        self._ensures = []
+
+    def send_notifications(self, tx_committed, notifications):
+        try:
+            if tx_committed:
+                for ref, oldval, newval in notifications:
+                    ref.notifyWatches(oldval, newval)
+                for action in self._actions:
+                    pass # TODO actions when agents are supported
+        finally:
+            self._actions = []
 
     ### External API
     @classmethod
@@ -492,7 +498,7 @@ class LockingTransaction():
         if not transaction:
             transaction = LockingTransaction()
             cls.transaction.data = transaction
-        
+
         if transaction._info:
             # Already running transaction... execute current transaction in it. No nested transactions in the same thread
             return apply(fn)

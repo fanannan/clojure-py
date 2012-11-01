@@ -20,14 +20,12 @@ class TVal:
             self.prev = self
             self.next = self
 
-def hashCombine(hash, seed):#FIXME - unused argument?
+def hashCombine(hash, seed): # FIXME - unused argument?
     seed ^= seed + 0x9e3779b9 + (seed << 6) + (seed >> 2)
     return seed
 
-
 def hasheq(o):
     raise AbstractMethodCall()
-
 
 def conjToAssoc(self, o):
     if isinstance(o, MapEntry):

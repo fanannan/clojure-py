@@ -142,7 +142,7 @@ class TestThreadedTransactions(unittest.TestCase):
 
         self.t1counter = 0
         self.t2counter = 0
-
+        
         def t1():
             # We do the first in-transaction-write
             self.refA.refSet(888)
@@ -172,7 +172,7 @@ class TestThreadedTransactions(unittest.TestCase):
             t1wait.set()
 
             self.t2counter += 1
-
+            
         self.refA = Ref(999, None)
         th1 = self.runTransactionInThread(t1, autostart=False)
         th2 = self.runTransactionInThread(t2, autostart=False)

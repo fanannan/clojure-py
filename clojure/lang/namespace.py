@@ -45,18 +45,6 @@ def findNS(name, fromns=None):
     if symbol_name in getattr(fromns, "__aliases__", {}):
         return fromns.__aliases__[symbol_name]
     return sys.modules.get(str(name))
-    # module =  sys.modules.get(str(name))
-    # if module == None:
-    #     parts = name.split(".")
-    #     clss = parts.pop()
-    #     modname = ".".join(parts)
-    #     module = sys.modules.get(modname)
-    #     if module:
-    #         # remodule.__dict__[clss]
-    #         print "Got module and name: %s %s" % (module, clss)
-    #     return module
-    # else:
-    #     return module
 
 def remove(ns):
     """Removes a namespace from sys.modules.

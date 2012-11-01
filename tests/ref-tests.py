@@ -127,9 +127,9 @@ class TestLockingTransaction(unittest.TestCase):
         with running_transaction(self):
             t = LockingTransaction.ensureGet()
             self.assertEqual(t._readPoint, -1)
-            t._updateReadPoint()
+            t._updateReadPoint(False)
             self.assertEqual(t._readPoint, 0)
-            t._updateReadPoint()
+            t._updateReadPoint(False)
             self.assertEqual(t._readPoint, 1)
             self.assertEqual(t._getCommitPoint(), 2)
             self.assertEqual(t._readPoint, 1)
@@ -143,14 +143,14 @@ class TestLockingTransaction(unittest.TestCase):
         with running_transaction(self):
             t = LockingTransaction.ensureGet()
             # NOTE assumes transactions don't actually work yet (_info is never set)
-            t._stop(TransactionState.Killed)
+            t._stop_transaction(TransactionState.Killed)
             self.assertIsNone(t._info)
 
             # Fake running transaction
             t._info = Info(TransactionState.Running, t._readPoint)
             self.assertIsNotNone(t._info)
             self.assertEqual(t._info.status.get(), TransactionState.Running)
-            t._stop(TransactionState.Committed)
+            t._stop_transaction(TransactionState.Committed)
             # No way to check for proper status==Committed here since it sets the countdownlatch then immediately sets itself to none
             self.assertIsNone(t._info)
 
@@ -218,8 +218,8 @@ class TestLockingTransaction(unittest.TestCase):
             t = LockingTransaction.ensureGet()
             sleep(.1)
 
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
 
             # Give this ref over to another transaction
             def secondary(testclass, mainTransaction):
@@ -240,8 +240,8 @@ class TestLockingTransaction(unittest.TestCase):
         with running_transaction(self):
             t = LockingTransaction.ensureGet()
 
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
 
             def secondary(testclass, mainTransaction):
                 t = LockingTransaction.ensureGet()
@@ -267,8 +267,8 @@ class TestLockingTransaction(unittest.TestCase):
 
             # Ref has a previously committed value and no in-transaction-value, so check it
             # Since we're faking this test, we need our read point to be > 0
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
             self.assertEqual(t.getRef(self.refZero), 0)
             # Make sure we unlocked the ref's lock
             self.assertRaises(Exception, self.refZero._lock.release_shared)
@@ -278,9 +278,9 @@ class TestLockingTransaction(unittest.TestCase):
             self.assertEqual(t.getRef(self.refZero), 0)
 
             # Now we want the latest value
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
             self.assertEqual(t.getRef(self.refZero), 100)
 
             # Force the oldest val to be too new to get a fault
@@ -295,8 +295,8 @@ class TestLockingTransaction(unittest.TestCase):
     def testDoSet_PASS(self):
         with running_transaction(self):
             t = LockingTransaction.ensureGet()
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
 
             # Do the set and make sure it was set in our various transaction state vars
             t.doSet(self.refZero, 200)
@@ -314,8 +314,8 @@ class TestLockingTransaction(unittest.TestCase):
             self.assertRaises(Exception, self.refZero._lock.release_shared)
 
             # Now set our transaction to be further in the future, ensure works
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
             t.doEnsure(self.refZero)
             self.assertTrue(self.refZero in t._ensures)
             # Try again
@@ -327,16 +327,16 @@ class TestLockingTransaction(unittest.TestCase):
     def testEnsures_FAIL(self):
         with running_transaction(self):
             t = LockingTransaction.ensureGet()
-            LockingTransaction.ensureGet()._updateReadPoint()
-            LockingTransaction.ensureGet()._updateReadPoint()
+            LockingTransaction.ensureGet()._updateReadPoint(False)
+            LockingTransaction.ensureGet()._updateReadPoint(False)
 
             # Make another transaction to simulate a conflict (failed ensure)
             # First, write to it in this thread
             t.doSet(self.refZero, 999)
             def secondary(testclass, mainTransaction):
                 t = LockingTransaction.ensureGet()
-                LockingTransaction.ensureGet()._updateReadPoint()
-                LockingTransaction.ensureGet()._updateReadPoint()
+                LockingTransaction.ensureGet()._updateReadPoint(False)
+                LockingTransaction.ensureGet()._updateReadPoint(False)
 
                 # Try an ensure that will fail (and cause a bail)
                 testclass.assertRaises(TransactionRetryException, t.doEnsure(testclass.refZero))
