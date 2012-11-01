@@ -64,14 +64,14 @@ class TestRef(unittest.TestCase):
 @contextmanager
 def running_transaction(thetest):
     # Fake a running transaction
-    LockingTransaction.transaction.data = LockingTransaction()
-    LockingTransaction.transaction.data._info = Info(TransactionState.Running, LockingTransaction.transaction.data._startPoint)
+    LockingTransaction._transactions.local = LockingTransaction()
+    LockingTransaction._transactions.local._info = Info(TransactionState.Running, LockingTransaction._transactions.local._startPoint)
     LockingTransaction.ensureGet()._readPoint = -1
     LockingTransaction.transactionCounter = count()
     LockingTransaction.ensureGet()._startPoint = time()
     yield
     # Clean up and remove LockingTransaction we created
-    LockingTransaction.transaction = thread_local()
+    LockingTransaction._transactions = thread_local()
     thetest.assertIsNone(LockingTransaction.get())
 
 class TestLockingTransaction(unittest.TestCase):
@@ -87,10 +87,10 @@ class TestLockingTransaction(unittest.TestCase):
         """
         def thread_func(testclass, mainTransaction, funcToRun):
             self.assertIsNone(LockingTransaction.get())
-            LockingTransaction.transaction.data = LockingTransaction()
-            LockingTransaction.transaction.data._info = Info(TransactionState.Running, LockingTransaction.transaction.data._startPoint)
+            LockingTransaction._transactions.local = LockingTransaction()
+            LockingTransaction._transactions.local._info = Info(TransactionState.Running, LockingTransaction._transactions.local._startPoint)
             funcToRun(testclass, mainTransaction)
-            LockingTransaction.transaction = thread_local()
+            LockingTransaction._transactions = thread_local()
             self.assertIsNone(LockingTransaction.get())
 
         t = Thread(target=thread_func, args=[self, LockingTransaction.ensureGet(), func])

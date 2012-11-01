@@ -8,9 +8,6 @@ from threadutil import AtomicInteger
 from threading import local as thread_local
 from threading import Lock, Event, current_thread
 from time import time
-# Don't use OrderedDict as it's python 2.7+
-# TODO determine the best way to keep the order of commutes in a transaction
-# from collections import OrderedDict
 
 # How many times to retry a transaction before giving up
 RETRY_LIMIT = 10000
@@ -50,7 +47,7 @@ class Info:
         return status in (TransactionState.Running, TransactionState.Committing)
 
 class LockingTransaction():
-    transaction = thread_local()
+    _transactions = thread_local()
     # Global ordering on all transactions---provides a mechanism for determing relativity of transactions
     #  to each other
     # Start the count at 1 since refs history starts at 0, and a ref created before the first transaction
@@ -473,9 +470,9 @@ class LockingTransaction():
         """
         Returns the per-thread singleton transaction
         """
-        if 'data' in cls.transaction.__dict__ and cls.transaction.data._info:
-            return cls.transaction.data
-        else:
+        try:
+            return cls.ensureGet()
+        except IllegalStateException:
             return None
 
     @classmethod
@@ -484,20 +481,23 @@ class LockingTransaction():
         Returns the per-thread singleton transaction, or raises
         an IllegalStateException if one is not running
         """
-        if cls.get():
-            return cls.get()
-        else:
-            raise IllegalStateException("No transaction running")
+        try:
+            transaction = cls._transactions.local
+            if not transaction or not transaction._info:
+                raise AttributeError
+        except AttributeError:
+            raise IllegalStateException("No transaction running.")
+        return transaction
 
     @classmethod
     def runInTransaction(cls, fn):
         """
         Runs the desired function in this transaction
         """
-        transaction = cls.get()
-        if not transaction:
-            transaction = LockingTransaction()
-            cls.transaction.data = transaction
+        try:
+            transaction = cls.ensureGet()
+        except IllegalStateException:
+            transaction = cls._transactions.local = LockingTransaction()
 
         if transaction._info:
             # Already running transaction... execute current transaction in it. No nested transactions in the same thread
