@@ -856,6 +856,8 @@
         not-found)))
   (__len__ [self]
     (py.bytecode/BINARY_SUBTRACT end off))
+  (nth [self & args]
+    (apply (.-__getitem__ self) args))
   (dropFirst [self]
     (if (= off end)
       (throw (IllegalStateException "dropFirst of empty chunk")))

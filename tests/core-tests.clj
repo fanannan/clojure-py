@@ -903,3 +903,9 @@
     (a/assert-equal (with-redefs [class (constantly nil)]
                       (class [])) nil)
     (a/assert-equal (class []) (type []))) ; Make sure variables are restored properly by with-redefs
+
+(deftest ArrayChunk-tests
+    ; range creates an ArrayChunk and filter and map-indexed are using the .nth attribute
+    ; throws before fix ... AttributeError: 'ArrayChunk' object has no attribute nth 
+    (a/assert-equal (filter (fn [x] (zero? (mod x 3))) (range 10)) [0 3 6 9])
+    (a/assert-equal (map-indexed (fn [idx x] [idx x]) (range 2)) [[0 0] [1 1]]))
