@@ -38,6 +38,9 @@ class IllegalArgumentException(Exception):
     pass
 
 
+class TransactionRetryException(Exception):
+    pass
+    
 class ReaderException(Exception):
     def __init__(self, s=None, rdr=None):
         Exception.__init__(

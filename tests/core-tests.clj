@@ -909,3 +909,24 @@
     ; throws before fix ... AttributeError: 'ArrayChunk' object has no attribute nth 
     (a/assert-equal (filter (fn [x] (zero? (mod x 3))) (range 10)) [0 3 6 9])
     (a/assert-equal (map-indexed (fn [idx x] [idx x]) (range 2)) [[0 0] [1 1]]))
+
+(deftest ref-tests
+    (a/assert-true (ref nil))
+    (let [r (ref nil)]
+        (a/assert-equal (deref r) nil)
+        (a/assert-equal @r nil))
+    (let [r (ref :a)]
+        (a/assert-equal (dosync (ref-set r :b)) :b)
+        (a/assert-equal @r :b))
+    (let [r (ref [:a])]
+        (a/assert-equal (dosync (alter r conj :b)) [:a :b])
+        (a/assert-equal @r [:a :b]))
+    (let [r (ref [:a])]
+        (a/assert-equal (dosync (commute r conj :b)) [:a :b]))
+    (let [r (ref [:a])]
+        (a/assert-equal (dosync (ensure r)) [:a]))
+    (let [r (ref [:a])]
+        (a/assert-equal (dosync (ensure r) (commute r conj :b)) [:a :b]))
+    (a/assert-equal (sync nil :a) :a)
+    (a/assert-equal (sync nil :a :b :c) :c)
+    (a/assert-equal (dosync :a :z :f) :f))

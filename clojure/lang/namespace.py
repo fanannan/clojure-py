@@ -46,7 +46,6 @@ def findNS(name, fromns=None):
         return fromns.__aliases__[symbol_name]
     return sys.modules.get(str(name))
 
-
 def remove(ns):
     """Removes a namespace from sys.modules.
     """
