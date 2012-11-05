@@ -45,6 +45,9 @@
   (a/assert-true (false? false))
   (a/assert-false (false? true)))
 
+(deftest not-tests
+  (a/assert-false (not 0)))
+
 (deftest if-not-tests
     (a/assert-true (if-not false true))
     (a/assert-false (if-not true true false))

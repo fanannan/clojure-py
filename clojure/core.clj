@@ -453,7 +453,7 @@
 (defn not
   "Returns true if x is logical false, false otherwise."
   {:added "1.0"}
-  [x] (py/if x false true))
+  [x] (if* x false true))
 
 (defmacro cond
   "Takes a set of test/expr pairs. It evaluates each test one at a time.  If a
