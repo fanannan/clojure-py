@@ -931,3 +931,7 @@
     (a/assert-true (distinct? #{1} {1 1}))
     (a/assert-false (distinct? 1 1))
     (a/assert-false (distinct? #{1} #{1})))
+
+(deftest randnth-tests
+    (a/assert-true (< (rand-nth (range 5)) 5))
+    (a/assert-true (= (rand-nth '(2 2 2 2)) 2)))
