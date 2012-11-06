@@ -1,10 +1,7 @@
 import os.path
 import sys
-if (sys.version_info.major, sys.version_info.minor) >= (2, 7):
-    import unittest
-else:
-    import unittest2 as unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import unittest
 
 from clojure.lang.cljkeyword import Keyword
 from clojure.lang.namespace import Namespace, findItem

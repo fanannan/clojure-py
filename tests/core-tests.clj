@@ -933,3 +933,6 @@
     (a/assert-equal (sync nil :a) :a)
     (a/assert-equal (sync nil :a :b :c) :c)
     (a/assert-equal (dosync :a :z :f) :f))
+
+(deftest str-tests
+    (a/assert-equal (str "a" nil "b") "ab"))

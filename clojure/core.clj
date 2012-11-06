@@ -544,12 +544,12 @@
   {:added "1.0"}
   ([] "")
   ([x]
-    (py/if (nil? x) "" (py/str x)))
+    (if (nil? x) "" (py/str x)))
   ([x & ys]
-    (let [lst (py/list (py/str x))
+    (let [lst (py/list (str x))
           lst (loop [remain ys]
-                (py/if remain
-                  (do (.append lst (py/str (first remain)))
+                (if remain
+                  (do (.append lst (str (first remain)))
                       (recur (next remain)))
                   lst))]
       (.join "" lst))))
