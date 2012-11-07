@@ -51,7 +51,7 @@
   ([s regex]
      (seq (re/split regex s)))
   ([s regex limit]
-     (seq (re/split regex s limit))))
+     (seq (re/split regex s (dec limit)))))
 
 (defn split-lines
   ; Splits s on \\n or \\r\\n.

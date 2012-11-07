@@ -42,7 +42,7 @@
 
 (deftest split-tests
     (assertions/assert-equal (string/split "a b c\td e f" #"\s") ["a" "b" "c" "d" "e" "f"])
-    (assertions/assert-equal (string/split "a,b,c,d,e,f" #"," 3) ["a" "b" "c" "d,e,f"]))
+    (assertions/assert-equal (string/split "a,b,c,d,e,f" #"," 3) ["a" "b" "c,d,e,f"]))
 
 (deftest split-lines
     (assertions/assert-equal
