@@ -1,7 +1,7 @@
 import os.path
 import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import unittest
-sys.path = [os.path.dirname(__file__)+"../"] + sys.path
 
 from clojure.lang.cljkeyword import Keyword
 from clojure.lang.namespace import Namespace, findItem

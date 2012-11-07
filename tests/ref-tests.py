@@ -2,7 +2,11 @@
 
 Thursday, Oct. 25 2012"""
 
-import unittest
+import sys
+if (sys.version_info[0], sys.version_info[1]) >= (2, 7):
+    import unittest
+else:
+    import unittest2 as unittest
 from threading import Thread, current_thread
 from threading import local as thread_local
 from contextlib import contextmanager

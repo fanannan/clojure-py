@@ -45,6 +45,9 @@
   (a/assert-true (false? false))
   (a/assert-false (false? true)))
 
+(deftest not-tests
+  (a/assert-false (not 0)))
+
 (deftest if-not-tests
     (a/assert-true (if-not false true))
     (a/assert-false (if-not true true false))
@@ -430,10 +433,6 @@
 ;(deftest ->>-tests ; haven't a clue how to test this
 ;    )
 
-
-;;; var stuff
-
-
 ;;; if-let and when-let tests are from
 ;;; http://blog.jayfields.com/2011/03/clojure-if-let-and-when-let.html
 
@@ -758,7 +757,8 @@
     (a/assert-equal (+ x y) 0))
 
 (deftest var-tests
-    (a/assert-true (py/hasattr #'cons "deref")))
+    (a/assert-true (py/hasattr #'cons "deref"))
+    (a/assert-true (var? #'a/assert-true)))
 
 (deftest doc-tests
     (defn baz "This is a test" [] nil)
@@ -930,3 +930,6 @@
     (a/assert-equal (sync nil :a) :a)
     (a/assert-equal (sync nil :a :b :c) :c)
     (a/assert-equal (dosync :a :z :f) :f))
+
+(deftest str-tests
+    (a/assert-equal (str "a" nil "b") "ab"))

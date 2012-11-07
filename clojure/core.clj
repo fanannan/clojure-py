@@ -453,7 +453,7 @@
 (defn not
   "Returns true if x is logical false, false otherwise."
   {:added "1.0"}
-  [x] (py/if x false true))
+  [x] (if* x false true))
 
 (defmacro cond
   "Takes a set of test/expr pairs. It evaluates each test one at a time.  If a
@@ -544,12 +544,12 @@
   {:added "1.0"}
   ([] "")
   ([x]
-    (py/if (nil? x) "" (py/str x)))
+    (if (nil? x) "" (py/str x)))
   ([x & ys]
-    (let [lst (py/list (py/str x))
+    (let [lst (py/list (str x))
           lst (loop [remain ys]
-                (py/if remain
-                  (do (.append lst (py/str (first remain)))
+                (if remain
+                  (do (.append lst (str (first remain)))
                       (recur (next remain)))
                   lst))]
       (.join "" lst))))
@@ -2577,9 +2577,11 @@
            (clojure.lang.var/popThreadBindings))))))
 
 (defmacro var
-  [itm]
+  "The symbol must resolve to a var, and the Var object itself (not its value)
+  is returned.  The reader macro #'x expands to (var x)."
+  [symbol]
   `(clojure.lang.namespace/findItem (clojure.lang.namespace/findNS ~'__name__)
-                                    (symbol ~(name itm))))
+                                    '~symbol))
 
 (defn var?
   "Return true if x is a Var"
