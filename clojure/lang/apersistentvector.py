@@ -10,8 +10,9 @@ from clojure.lang.iprintable import IPrintable
 from clojure.lang.indexableseq import IndexableSeq
 from clojure.lang.ipersistentset import IPersistentSet
 from clojure.lang.ipersistentvector import IPersistentVector
-from clojure.lang.cljexceptions import AbstractMethodCall, ArityException
+from clojure.lang.cljexceptions import ArityException
 from clojure.lang.cljexceptions import IndexOutOfBoundsException
+
 
 class APersistentVector(IPersistentVector, IPrintable):
     """Pseudo-Abstract class to define a persistent vector.
@@ -39,6 +40,9 @@ class APersistentVector(IPersistentVector, IPrintable):
         if not len(self):
             return None
         return IndexableSeq(self, 0)
+
+    def count(self):
+        return len(self)
 
     def __eq__(self, other):
         """Equality test.
@@ -70,7 +74,7 @@ class APersistentVector(IPersistentVector, IPrintable):
 
     # Placing these print methods here will cover:
     # MapEntry, PersistentVector, and SubVec
-    
+
     def writeAsString(self, writer):
         """Write [...] to writer.
 

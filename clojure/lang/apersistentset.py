@@ -9,7 +9,7 @@ from clojure.lang.ifn import IFn
 from clojure.lang.iprintable import IPrintable
 from clojure.lang.apersistentmap import createKeySeq
 from clojure.lang.ipersistentset import IPersistentSet
-from clojure.lang.cljexceptions import AbstractMethodCall, ArityException
+from clojure.lang.cljexceptions import ArityException
 
 
 class APersistentSet(IPersistentSet, IFn, IPrintable):

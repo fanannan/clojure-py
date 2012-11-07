@@ -16,7 +16,7 @@ class APersistentMap(IPersistentMap, IPrintable):
         if isinstance(o, IPersistentVector):
             if len(o) != 2:
                 raise InvalidArgumentException("Vector arg to map conj must "
-                                               + "be a pair")
+                                               "be a pair")
             return self.assoc(o[0], o[1])
         ret = self
         s = o.seq()
