@@ -2577,9 +2577,11 @@
            (clojure.lang.var/popThreadBindings))))))
 
 (defmacro var
-  [itm]
+  "The symbol must resolve to a var, and the Var object itself (not its value)
+  is returned.  The reader macro #'x expands to (var x)."
+  [symbol]
   `(clojure.lang.namespace/findItem (clojure.lang.namespace/findNS ~'__name__)
-                                    (symbol ~(name itm))))
+                                    '~symbol))
 
 (defn var?
   "Return true if x is a Var"
