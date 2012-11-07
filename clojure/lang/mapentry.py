@@ -1,8 +1,5 @@
-"""
-March 26, 2012 -- documented
-"""
-
 from clojure.lang.amapentry import AMapEntry
+
 
 class MapEntry(AMapEntry):
     """Concrete implementation of an AMapEntry.

@@ -15,7 +15,7 @@ def synchronized(f):
     return synchronized_closure
 
 
-class ThreadLocal(local, object):
+class ThreadLocal(local):
     def __init__(self):
         pass
 
@@ -27,8 +27,8 @@ class ThreadLocal(local, object):
     def set(self, value):
         self.value = value
 
-class AtomicInteger(object):
 
+class AtomicInteger(object):
     def __init__(self, v=0):
         self._v = v
         self._lock = SharedLock()

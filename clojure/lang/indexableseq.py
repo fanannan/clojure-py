@@ -1,7 +1,8 @@
 from clojure.lang.aseq import ASeq
 from clojure.lang.counted import Counted
 
-class IndexableSeq(ASeq, Counted, object):
+
+class IndexableSeq(ASeq, Counted):
     def __init__(self, array, i):
         self.array = array
         self.i = i
@@ -22,7 +23,8 @@ class IndexableSeq(ASeq, Counted, object):
         for x in range(self.i, len(self.array)):
             c.append(str(self.array[x]))
         return "[" + " ".join(c) + "]"
-        
+
+
 def create(obj):
     if len(obj) == 0:
         return None

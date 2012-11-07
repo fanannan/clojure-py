@@ -1,13 +1,10 @@
-"""
-March 29, 2012 -- documented
-"""
-
 import cStringIO
 
 from clojure.lang.aseq import ASeq
 from clojure.lang.cljexceptions import ArityException
 from clojure.lang.persistentlist import EMPTY
 import clojure.lang.rt as RT
+
 
 class Cons(ASeq):
     def __init__(self, *args):
@@ -17,7 +14,7 @@ class Cons(ASeq):
 
         * object, ISeq
           head and tail, respectively
-          
+
         * IPersistentMap, object, ISeq
           meta data, head and tail
 

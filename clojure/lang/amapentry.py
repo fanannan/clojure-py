@@ -1,10 +1,7 @@
-"""
-March 25, 2012 -- documented
-"""
-
 from clojure.lang.apersistentvector import APersistentVector
 from clojure.lang.persistentvector import create as createVector
 from clojure.lang.cljexceptions import IndexOutOfBoundsException
+
 
 class AMapEntry(APersistentVector):
     """An APersistentVector of exactly two items.

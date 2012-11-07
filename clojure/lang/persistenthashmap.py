@@ -47,7 +47,7 @@ def removePair(array, i):
     newArray = array[:2*i]
     newArray.extend(array[2*(i + 1):])
     return newArray
-    
+
 class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
     def __init__(self, *args):
         """Instantiate a PersistentHashMap
@@ -71,7 +71,7 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
             self.noneValue = args[4]
         else:
             raise ArityException()
-            
+
     def withMeta(self, meta):
         if self._meta is meta:
             return self

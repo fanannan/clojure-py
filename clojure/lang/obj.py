@@ -1,12 +1,8 @@
-"""
-March 25, 2012 -- documented
-"""
-
 from clojure.lang.iobj import IObj
 from clojure.lang.cljexceptions import AbstractMethodCall
 
 
-class Obj(IObj, object):
+class Obj(IObj):
     """An object that may have meta data attached.
 
     _meta -- a PersistentHashMap

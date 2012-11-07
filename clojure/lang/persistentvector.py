@@ -1,7 +1,3 @@
-"""
-March 25, 2012 -- documented
-"""
-
 import clojure.lang.rt as RT
 from clojure.lang.atomicreference import AtomicReference
 from clojure.lang.apersistentvector import APersistentVector

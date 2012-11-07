@@ -1,7 +1,3 @@
-"""
-March 25, 2012 -- documented
-"""
-
 import clojure.lang.rt as RT
 from clojure.lang.obj import Obj
 from clojure.lang.iseq import ISeq

@@ -1,7 +1,3 @@
-"""
-March 25, 2012 -- documented
-"""
-
 import cStringIO
 
 import clojure.lang.rt as RT

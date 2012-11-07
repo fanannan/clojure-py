@@ -1,7 +1,7 @@
 from clojure.lang.cljexceptions import AbstractMethodCall
 from clojure.lang.seqable import Seqable
 
-class IPersistentCollection(Seqable, object):
+class IPersistentCollection(Seqable):
     def count(self):
         raise AbstractMethodCall(self)
 
