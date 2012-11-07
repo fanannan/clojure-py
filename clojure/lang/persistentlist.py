@@ -73,6 +73,7 @@ class PersistentList(ASeq, IPersistentList, IReduce, Counted):
     def __len__(self):
         """Return the number of items in this list."""
         return self._count
+    count = __len__
 
     def cons(self, o):
         """Return a new PersistentList.

@@ -59,13 +59,13 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         """
         if len(args) == 4:
             self._meta = None        # IPersistentMap
-            self.count = args[0]     # int
+            self._count = args[0]    # int
             self.root = args[1]      # INode
             self.hasNull = args[2]   # bool
             self.noneValue = args[3] # object
         elif len(args) == 5:
             self._meta = args[0]
-            self.count = args[1]
+            self._count = args[1]
             self.root = args[2]
             self.hasNull = args[3]
             self.noneValue = args[4]
@@ -76,7 +76,7 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         if self._meta is meta:
             return self
         return PersistentHashMap(meta,
-                                 self.count,
+                                 self._count,
                                  self.root,
                                  self.hasNull,
                                  self.noneValue)
@@ -85,7 +85,7 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         if key is None:
             if self.hasNull and val == self.noneValue:
                 return self
-            return PersistentHashMap(self._meta, self.count if self.hasNull else self.count + 1, self.root, True, val)
+            return PersistentHashMap(self._meta, self._count if self.hasNull else self._count + 1, self.root, True, val)
         addedLeaf = Box(None)
         newRoot = EMPTY_BITMAP_NODE if self.root is None else self.root
         newRoot = newRoot.assoc(0, hash(key), key, val, addedLeaf)
@@ -93,11 +93,11 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         if newRoot == self.root:
             return self
 
-        return PersistentHashMap(self._meta, self.count if addedLeaf.val is None else self.count + 1, newRoot, self.hasNull, self.noneValue)
+        return PersistentHashMap(self._meta, self._count if addedLeaf.val is None else self._count + 1, newRoot, self.hasNull, self.noneValue)
 
     def without(self, key):
         if key is None:
-            return PersistentHashMap(self._meta, self.count - 1, self.root, False, None) if self.hasNull else self
+            return PersistentHashMap(self._meta, self._count - 1, self.root, False, None) if self.hasNull else self
 
         if self.root is None:
             return self
@@ -105,7 +105,7 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         if newroot is self.root:
             return self
 
-        return PersistentHashMap(self._meta, self.count - 1, newroot, self.hasNull, self.noneValue)
+        return PersistentHashMap(self._meta, self._count - 1, newroot, self.hasNull, self.noneValue)
 
     def valAt(self, key, notFound = None):
         if key is None:
@@ -121,7 +121,11 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
         return Cons(MapEntry(None, self.noneValue), s) if self.hasNull else s
 
     def __len__(self):
-        return self.count
+        return self._count
+    count = __len__
+
+    def empty(self):
+        return EMPTY.withMeta(self._meta)
 
     def containsKey(self, key):
         if key is None:
@@ -131,7 +135,7 @@ class PersistentHashMap(APersistentMap, IEditableCollection, IObj):
                 is not NOT_FOUND
         else:
             return False
-        
+
     def __repr__(self):
         s = []
         for x in self:
@@ -278,6 +282,12 @@ class Seq(ASeq):
 
     def next(self):
         return createSeq(None, self.nodes, self.i, self.s.next())
+
+    def count(self):
+        return len(self.nodes)
+
+    def empty(self):
+        return None
 
 def createSeq(*args):
     if len(args) == 1:
@@ -619,6 +629,13 @@ class NodeSeq(ASeq):
         if self.s is not None:
             return createNodeSeq(self.array, self.i, self.s.next())
         return createNodeSeq(self.array, self.i + 2, None)
+
+    def count(self):
+        return len(self.array)
+
+    def empty(self):
+        return None
+
 
 def createNodeSeq(*args):
     if len(args) == 1:

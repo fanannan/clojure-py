@@ -115,7 +115,6 @@ def mapHash(m):
                   0)
 
 
-
 class KeySeq(ASeq):
     def __init__(self, *args):
         if len(args) == 1:
@@ -140,6 +139,12 @@ class KeySeq(ASeq):
         while s is not None:
             yield s.first()
             s = s.next()
+
+    def count(self):
+        return len(list(iter(self)))
+
+    def empty(self):
+        return None
 
 
 def createKeySeq(s):
@@ -172,6 +177,12 @@ class ValueSeq(ASeq):
         while s is not None:
             yield s.first()
             s = s.next()
+
+    def count(self):
+        return len(list(iter(self)))
+
+    def empty(self):
+        return None
 
 
 def createValueSeq(s):

@@ -65,3 +65,7 @@ class Cons(ASeq):
             c += 1
             self = self.next()
         return c
+    count = __len__
+
+    def empty(self):
+        return EMPTY

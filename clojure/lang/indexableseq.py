@@ -17,6 +17,10 @@ class IndexableSeq(ASeq, Counted):
 
     def __len__(self):
         return len(self.array) - self.i
+    count = __len__
+
+    def empty(self):
+        return None
 
     def __repr__(self):
         c = []

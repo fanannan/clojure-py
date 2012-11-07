@@ -745,6 +745,8 @@
       (py/if (nil? s)
         c
         (recur (inc c) (next s)))))
+  (count [self]
+    (.__len__ self))
   (__eq__ [self other]
     (loop [s (seq self)
            o (seq other)]

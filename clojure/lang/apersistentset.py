@@ -89,6 +89,9 @@ class APersistentSet(IPersistentSet, IFn, IPrintable):
             self._hash = hsh
         return self._hash
 
+    def count(self):
+        return self.impl.count()
+
     def writeAsString(self, writer):
         """Write #{...} to writer.
 
