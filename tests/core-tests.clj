@@ -933,3 +933,27 @@
 
 (deftest str-tests
     (a/assert-equal (str "a" nil "b") "ab"))
+
+(deftest empty-tests
+    (a/assert-true (empty? '()))
+    (a/assert-true (empty? {}))
+    (a/assert-true (empty? #{}))
+    (a/assert-false (empty? [1]))
+    (a/assert-false (empty? '(1 2 3 4))))
+
+(deftest while-tests
+    (let [a (atom 10)]
+        (while (pos? @a)
+            (swap! a dec))
+        (a/assert-equal 0 @a))
+    (a/assert-equal nil (while (neg? 0))))
+
+(deftest distinct-tests
+    (a/assert-true (distinct? 1 2 3 [1 2] [1 2 3]))
+    (a/assert-true (distinct? #{1} {1 1}))
+    (a/assert-false (distinct? 1 1))
+    (a/assert-false (distinct? #{1} #{1})))
+
+(deftest randnth-tests
+    (a/assert-true (< (rand-nth (range 5)) 5))
+    (a/assert-true (= (rand-nth '(2 2 2 2)) 2)))
