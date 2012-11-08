@@ -918,13 +918,13 @@
         (a/assert-equal 0 @a))
     (a/assert-equal nil (while (neg? 0))))
 
-(deftest repeatedly-tests
-    (a/assert-equal
-        '((0 1) (0 1) (0 1) (0 1) (0 1))
-        (repeatedly 5 #(range 2)))
-    (a/assert-equal
-        '(2 2 2 2 2)
-        (let [a 1] (take 5 (repeatedly #(+ 1 a))))))
+; (deftest repeatedly-tests
+;     (a/assert-equal
+;         '((0 1) (0 1) (0 1) (0 1) (0 1))
+;         (repeatedly 5 #(range 2)))
+;     (a/assert-equal
+;         '(2 2 2 2 2)
+;         (let [a 1] (take 5 (repeatedly #(+ 1 a))))))
 
 (deftest distinct-tests
     (a/assert-true (distinct? 1 2 3 [1 2] [1 2 3]))
