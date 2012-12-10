@@ -1400,7 +1400,7 @@ class Compiler(object):
                 c.extend(self.compileForm(itm))
             elif itm is None:
                 c.extend(self.compileNone(itm))
-            elif type(itm) in [str, int, types.ClassType, type, Var]:
+            elif isinstance(itm, (str, int, types.ClassType, type, Var)):
                 c.extend([(LOAD_CONST, itm)])
             elif isinstance(itm, IPersistentVector):
                 c.extend(compileVector(self, itm))

@@ -902,6 +902,12 @@
             '()
           :else
             _more))
+  (count [self]
+    (loop [i 1, s (.next self)]
+      (if (not (nil? s))
+        (recur (py.bytecode/BINARY_ADD i (.count s)) (.next s))
+        i)))
+  (empty [self] clojure.lang.persistentlist/EMPTY)
 
   IChunkedSeq
   (chunkedFirst [self] chunk)

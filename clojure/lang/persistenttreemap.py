@@ -594,6 +594,9 @@ class Seq(ASeq):
             return super(Seq, self).count()
         return self.cnt
 
+    def empty(self):
+        return None
+
     def withMeta(self, meta):
         return Seq(meta, self.stack, self.asc, self.cnt)
 

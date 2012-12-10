@@ -552,7 +552,10 @@
 
 (deftype Accum [i]
     ISeq  ; Bit of a hack until we get definterface implemented
-    (inc [self] (py/setattr self "i" (inc i))))
+    (inc [self] (py/setattr self "i" (inc i)))
+    (seq [self] [])
+    (count [self] 0)
+    (empty [self] 0))
 
 
 (deftest dorun-tests
@@ -688,6 +691,8 @@
 (deftest reify-tests
     (let [f (fn [y] (reify ISeq
                            (seq [self] self)
+                           (count [self] 0)
+                           (empty [self] 0)
                            (first [self] y)))]
          (a/assert-equal (first (f 42)) 42)))
 
