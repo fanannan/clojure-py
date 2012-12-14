@@ -4,6 +4,7 @@ import clojure.lang.rt as RT
 from clojure.lang.iobj import IObj
 from clojure.lang.iprintable import IPrintable
 from clojure.lang.indexableseq import IndexableSeq
+from clojure.lang.ipersistentmap import IPersistentMap
 from clojure.lang.ipersistentset import IPersistentSet
 from clojure.lang.ipersistentvector import IPersistentVector
 from clojure.lang.cljexceptions import ArityException
@@ -46,13 +47,10 @@ class APersistentVector(IPersistentVector, IPrintable):
         other -- ISeq or something that implements the seq protocol
 
         ASeq.__eq__ is actually used."""
-        if self is other:
-            return True
-        if not RT.isSeqable(other) or isinstance(other, IPersistentSet):
-            return False
-        s = self.seq()
-        o = RT.seq(other)
-        return s == o
+        return (self is other or
+                (RT.isSeqable(other) and
+                 not isinstance(other, (IPersistentSet, IPersistentMap)) and
+                 self.seq() == RT.seq(other)))
 
     def __hash__(self):
         """Return the hash on this vector or 1 if the vector is empty.

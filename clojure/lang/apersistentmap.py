@@ -4,6 +4,7 @@ from clojure.lang.aseq import ASeq
 from clojure.lang.mapentry import MapEntry
 from clojure.lang.iprintable import IPrintable
 from clojure.lang.ipersistentmap import IPersistentMap
+from clojure.lang.ipersistentset import IPersistentSet
 from clojure.lang.ipersistentvector import IPersistentVector
 from clojure.lang.cljexceptions import (ArityException,
                                         InvalidArgumentException)
@@ -35,7 +36,15 @@ class APersistentMap(IPersistentMap, IPrintable):
         return d
 
     def __eq__(self, other):
-        return mapEquals(self, other)
+        if self is other:
+            return True
+        if isinstance(other, (IPersistentSet, IPersistentVector)):
+            return False
+        try:
+            return (len(self) == len(other) and
+                    all(s in other and other[s] == self[s] for s in self))
+        except TypeError:
+            return False
 
     def __ne__(self, other):
         return not self == other
@@ -87,25 +96,6 @@ class APersistentMap(IPersistentMap, IPrintable):
         writer.write("}")
 
 
-def mapEquals(m1, m2):
-    if m1 is m2:
-        return True
-    if not hasattr(m2, "__getitem__"):
-        return False
-    if not hasattr(m2, "__len__"):
-        return False
-    if not hasattr(m2, "__iter__"):
-        return False
-
-    if len(m1) != len(m2):
-        return False
-
-    for s in m1:
-        if s not in m2 or m2[s] != m1[s]:
-            return False
-    return True
-
-
 def mapHash(m):
     return reduce(lambda h, v: h + (0 if v.getKey() is None
                                       else hash(v.getKey()))
@@ -113,7 +103,6 @@ def mapHash(m):
                                       else hash(v.getValue())),
                   m.interator(),
                   0)
-
 
 
 class KeySeq(ASeq):

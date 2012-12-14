@@ -7,6 +7,10 @@
                  (.assoc "a" 1)
                  (.assoc "b" 2)))
 
+(deftest equality-tests
+    (assertions/assert-false (= {} []))
+    (assertions/assert-false (= {} #{})))
+
 (deftest assoc-tests
     (assertions/assert-true (.containsKey testmap "a")))
 
