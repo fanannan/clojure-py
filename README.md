@@ -48,9 +48,9 @@ To run from GitHub checkout:
     clojurepy
     
 ## License
-Not endorsed by Rich Hickey, but this project contains code based on his work
+Not endorsed by Rich Hickey, but this project contains code based on his work. Such code is licensed under the 
+following license
 
-    Clojure-Py
     Copyright (c) Rich Hickey. All rights reserved.
     The use and distribution terms for this software are covered by the
     Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
@@ -58,3 +58,5 @@ Not endorsed by Rich Hickey, but this project contains code based on his work
     By using this software in any fashion, you are agreeing to be bound by
     the terms of this license.
     You must not remove this notice, or any other, from this software.
+
+The rest of this code also resides under the Eclipse Public License 1.0 same as Clojure. 
