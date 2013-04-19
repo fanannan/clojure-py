@@ -3842,8 +3842,8 @@ Returns val."
     (. ref (touch))
     (. ref (deref)))
 
-(require 'multiprocessing.pool)
-(def solo-executor (multiprocessing.pool/ThreadPool))
+;(require 'multiprocessing.pool)
+(def solo-executor (throw (Exception. "No multiprocessing on Pythonista")))
 
 (defn future-call
   "Takes a function of no args and yields a future object that will
