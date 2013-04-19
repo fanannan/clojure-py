@@ -3843,7 +3843,7 @@ Returns val."
     (. ref (deref)))
 
 ;(require 'multiprocessing.pool)
-(def solo-executor (throw (Exception. "No multiprocessing on Pythonista")))
+(def solo-executor nil)
 
 (defn future-call
   "Takes a function of no args and yields a future object that will
@@ -3852,7 +3852,7 @@ Returns val."
   not yet finished, calls to deref/@ will block."
   {:added "1.1"}
   [f]
-  (let [res (.apply_async solo-executor f)]
+  (let [res (.apply_async (throw (Exception. "No multiprocessing on Pythonista")) f)]
     (reify
       IPending
        (isRealized [_] (.ready res))
