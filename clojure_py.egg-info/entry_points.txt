@@ -1,3 +1,0 @@
-[console_scripts]
-clojurepy = clojure.main:main
-
